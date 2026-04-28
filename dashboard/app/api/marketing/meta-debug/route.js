@@ -1066,6 +1066,52 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ...out });
   }
 
+  // Cleanup : pause la campagne broad orpheline + delete les posts/creatives
+  // créés via notre app dev (rejetés par Meta pour la création d'ads).
+  if (action === "cleanup_broad_orphans") {
+    const META_TOKEN = process.env.META_MARKETING_TOKEN;
+    const PAGE_ID    = "108762367616665";
+    const out = { steps: [] };
+    const ids = body.ids || {};
+
+    // Récupérer Page token pour delete posts
+    const pageTok = await meta(PAGE_ID, { fields: "access_token" });
+
+    // Pause campagne
+    if (ids.campaign_id) {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${ids.campaign_id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PAUSED", access_token: META_TOKEN }),
+      }).then(r => r.json());
+      out.steps.push(`Campagne ${ids.campaign_id} paused: ${!!r.success}`);
+    }
+
+    // Delete creatives orphelins
+    for (const cid of (ids.creative_ids || [])) {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${cid}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: META_TOKEN }),
+      }).then(r => r.json());
+      out.steps.push(`Creative ${cid} deleted: ${!!r.success}`);
+    }
+
+    // Delete page posts orphelins (Page Access Token requis)
+    if (pageTok.access_token) {
+      for (const pid of (ids.post_ids || [])) {
+        const r = await fetch(`https://graph.facebook.com/v21.0/${pid}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: pageTok.access_token }),
+        }).then(r => r.json());
+        out.steps.push(`Post ${pid} deleted: ${!!r.success} ${r.error?.message || ""}`);
+      }
+    }
+
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // Inspection rapide d'IDs arbitraires (campaign / adset / ad / creative)
   if (action === "inspect_ids") {
     const out = {};
