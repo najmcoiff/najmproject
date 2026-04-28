@@ -675,25 +675,32 @@ export async function POST(req) {
     out.reused_creative_id = creativeId;
     out.steps.push(creativeId ? `Creative existant réutilisé: ${creativeId}` : "Pas de creative existant trouvé — fallback sur creative simple");
 
-    // 3. Créer la campagne broad TRAFFIC
-    const campRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/campaigns`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `NC — Broad Trafic ${new Date().toISOString().slice(0,10)}`,
-        objective: "OUTCOME_TRAFFIC",
-        special_ad_categories: [],
-        is_adset_budget_sharing_enabled: false,
-        status: "ACTIVE",
-        access_token: process.env.META_MARKETING_TOKEN,
-      }),
-    }).then(r => r.json());
-    out.campaign = campRes;
-    if (!campRes.id) {
-      out.steps.push(`ERREUR campagne: ${campRes.error?.error_user_msg || campRes.error?.message}`);
-      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    // 3. Créer la campagne broad TRAFFIC — ou réutiliser celle passée en body
+    let campRes;
+    if (body.reuse_campaign_id) {
+      campRes = { id: body.reuse_campaign_id, reused: true };
+      out.steps.push(`Campagne réutilisée: ${body.reuse_campaign_id}`);
+    } else {
+      campRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/campaigns`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `NC — Broad Trafic ${new Date().toISOString().slice(0,10)}`,
+          objective: "OUTCOME_TRAFFIC",
+          special_ad_categories: [],
+          is_adset_budget_sharing_enabled: false,
+          status: "ACTIVE",
+          access_token: process.env.META_MARKETING_TOKEN,
+        }),
+      }).then(r => r.json());
+      if (!campRes.id) {
+        out.campaign = campRes;
+        out.steps.push(`ERREUR campagne: ${campRes.error?.error_user_msg || campRes.error?.message}`);
+        return NextResponse.json({ ok: false, ...out }, { status: 500 });
+      }
+      out.steps.push(`Campagne broad créée: ${campRes.id}`);
     }
-    out.steps.push(`Campagne broad créée: ${campRes.id}`);
+    out.campaign = campRes;
 
     // 4. Créer l'adset broad — DZ femmes 20-55, FB only, optim LP views
     const adsetRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adsets`, {
@@ -714,6 +721,7 @@ export async function POST(req) {
           genders: [2],
           publisher_platforms: ["facebook"],
           facebook_positions: ["feed", "story"],
+          targeting_automation: { advantage_audience: 1 },
         },
         status: "ACTIVE",
         access_token: process.env.META_MARKETING_TOKEN,
