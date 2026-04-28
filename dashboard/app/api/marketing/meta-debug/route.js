@@ -84,7 +84,7 @@ export async function GET(req) {
 
   // Historique des transactions (paiements, refus, débits)
   results.transactions = await meta(`${ACCOUNT}/transactions`, {
-    fields: "id,status,billing_reason,billing_period,charge_type,time,amount{value,currency},payment_option,vat_invoice_id,product_type,billing_period",
+    fields: "id,status,billing_reason,billing_period,charge_type,time,amount{value,currency},payment_option,vat_invoice_id,product_type",
     limit: "10",
   });
 
@@ -163,6 +163,60 @@ export async function GET(req) {
   }
 
   return NextResponse.json(results, { status: 200 });
+}
+
+// ── Helper : crée un creative link_data neuf + une ad active dans un adset ───
+// Utilisé par `create_broad_traffic` ET `recreate_broad_ad`. On NE réutilise
+// JAMAIS un creative existant : les creatives DPA tied au product_set
+// "Coiffure" (2007325089858160) propagent le code 2490424.
+async function createBroadAdInAdset(adsetId, ctx) {
+  const { PAGE_ID, AD_ACCOUNT, SITE_URL, AD_IMAGE, META_TOKEN } = ctx;
+  const steps = [];
+
+  const creativeRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `NC Broad Trafic ${Date.now()}`,
+      object_story_spec: {
+        page_id: PAGE_ID,
+        link_data: {
+          link: SITE_URL,
+          message: "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿",
+          name: "NajmCoiff — Grossiste Coiffure & Onglerie",
+          description: "Catalogue complet, paiement à la livraison.",
+          call_to_action: { type: "SHOP_NOW", value: { link: SITE_URL } },
+          picture: AD_IMAGE,
+        },
+      },
+      access_token: META_TOKEN,
+    }),
+  }).then(r => r.json());
+
+  if (!creativeRes.id) {
+    steps.push(`ERREUR creative: ${creativeRes.error?.error_user_msg || creativeRes.error?.message}`);
+    return { creative: creativeRes, ad: null, steps };
+  }
+  steps.push(`Creative link_data créé: ${creativeRes.id}`);
+
+  const adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "NC — Broad Trafic — Ad",
+      adset_id: adsetId,
+      creative: { creative_id: creativeRes.id },
+      status: "ACTIVE",
+      access_token: META_TOKEN,
+    }),
+  }).then(r => r.json());
+
+  if (!adRes.id) {
+    steps.push(`ERREUR ad: ${adRes.error?.error_user_msg || adRes.error?.message}`);
+  } else {
+    steps.push(`Ad créée: ${adRes.id}`);
+  }
+  return { creative: creativeRes, ad: adRes, steps };
 }
 
 export async function POST(req) {
@@ -648,34 +702,42 @@ export async function POST(req) {
   }
 
   // ─── Créer une campagne broad pour ramener du trafic et nourrir le pixel ─────
-  // Use case : retargeting bloqué (audience trop petite) → broad TRAFFIC en
-  // parallèle pour générer des landing-page views, grossir l'audience pixel
-  // et permettre au retargeting existant de redémarrer plus tard.
+  // Pile d'erreurs Meta v21 déjà rencontrées et neutralisées dans ce code :
+  //  1. is_adset_budget_sharing_enabled requis sur la campagne (pas de CBO)
+  //  2. targeting_automation.advantage_audience requis sur l'adset
+  //  3. age_max ≥ 65 requis quand advantage_audience=1
+  //  4. ❌ NE JAMAIS réutiliser un creative DPA tied au product_set "Coiffure"
+  //     2007325089858160 → hérite du code 2490424 "taux d'invalidations élevé"
+  //     → on crée TOUJOURS un creative link_data neuf avec image vérifiée.
   if (action === "create_broad_traffic") {
     const PAGE_ID    = "108762367616665";
     const AD_ACCOUNT = "act_880775160439589";
     const SITE_URL   = "https://www.najmcoiff.com";
+    // Image de référence — vérifiée existante & lourde (PNG 1376x768, ~1.4MB)
+    const AD_IMAGE   = `${SITE_URL}/hero-coiffure.png`;
     const out = { steps: [] };
+    const META_TOKEN = process.env.META_MARKETING_TOKEN;
 
-    // 1. Récupérer le budget des adsets existants pour s'aligner
-    const refAdset = await meta(ADSET_IDS[0], { fields: "daily_budget,bid_strategy" });
-    const dailyBudget = body.daily_budget || refAdset.daily_budget || 500;
-    out.daily_budget_used = dailyBudget;
-    out.steps.push(`Daily budget = ${dailyBudget} (cents EUR)`);
-
-    // 2. Récupérer un creative_id existant d'une ad active pour le réutiliser
-    let creativeId = null;
-    for (const campId of CAMP_IDS) {
-      const ads = await meta(`${campId}/ads`, { fields: "id,creative{id}" });
-      for (const ad of (ads.data || [])) {
-        if (ad.creative?.id) { creativeId = ad.creative.id; break; }
+    // 1. Pré-vérifier l'image AVANT de payer Meta (évite une création qui échouera silencieusement)
+    try {
+      const imgHead = await fetch(AD_IMAGE, { method: "HEAD" });
+      const imgLen = parseInt(imgHead.headers.get("content-length") || "0", 10);
+      if (!imgHead.ok || imgLen < 1000) {
+        out.steps.push(`ERREUR image inaccessible ou vide (HTTP ${imgHead.status}, size=${imgLen})`);
+        return NextResponse.json({ ok: false, ...out }, { status: 500 });
       }
-      if (creativeId) break;
+      out.steps.push(`Image OK: ${AD_IMAGE} (${imgLen} bytes)`);
+    } catch (e) {
+      out.steps.push(`ERREUR HEAD image: ${e.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
     }
-    out.reused_creative_id = creativeId;
-    out.steps.push(creativeId ? `Creative existant réutilisé: ${creativeId}` : "Pas de creative existant trouvé — fallback sur creative simple");
 
-    // 3. Créer la campagne broad TRAFFIC — ou réutiliser celle passée en body
+    // 2. Budget aligné sur les adsets existants (cents EUR)
+    const refAdset = await meta(ADSET_IDS[0], { fields: "daily_budget" });
+    const dailyBudget = body.daily_budget || refAdset.daily_budget || 1500;
+    out.steps.push(`Daily budget = ${dailyBudget} cents EUR`);
+
+    // 3. Créer (ou réutiliser) la campagne broad TRAFFIC
     let campRes;
     if (body.reuse_campaign_id) {
       campRes = { id: body.reuse_campaign_id, reused: true };
@@ -690,7 +752,7 @@ export async function POST(req) {
           special_ad_categories: [],
           is_adset_budget_sharing_enabled: false,
           status: "ACTIVE",
-          access_token: process.env.META_MARKETING_TOKEN,
+          access_token: META_TOKEN,
         }),
       }).then(r => r.json());
       if (!campRes.id) {
@@ -702,7 +764,7 @@ export async function POST(req) {
     }
     out.campaign = campRes;
 
-    // 4. Créer l'adset broad — DZ femmes 20-55, FB only, optim LP views
+    // 4. AdSet broad — DZ femmes 20-65, FB only, LP_VIEWS, advantage audience
     const adsetRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adsets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -724,7 +786,7 @@ export async function POST(req) {
           targeting_automation: { advantage_audience: 1 },
         },
         status: "ACTIVE",
-        access_token: process.env.META_MARKETING_TOKEN,
+        access_token: META_TOKEN,
       }),
     }).then(r => r.json());
     out.adset = adsetRes;
@@ -734,77 +796,78 @@ export async function POST(req) {
     }
     out.steps.push(`AdSet broad créé: ${adsetRes.id}`);
 
-    // 5. Créer l'ad — d'abord essayer le creative existant
-    let adRes = null;
-    if (creativeId) {
-      adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "NC — Broad Trafic — Ad",
-          adset_id: adsetRes.id,
-          creative: { creative_id: creativeId },
-          status: "ACTIVE",
-          access_token: process.env.META_MARKETING_TOKEN,
-        }),
-      }).then(r => r.json());
-      out.ad_attempt_reused = adRes;
-      if (adRes.id) out.steps.push(`Ad créée avec creative existant: ${adRes.id}`);
-      else          out.steps.push(`Creative existant rejeté: ${adRes.error?.error_user_msg || adRes.error?.message} → fallback`);
-    }
-
-    // Fallback : creative simple link_data pointant homepage (logo statique)
-    if (!adRes?.id) {
-      const fallbackCreative = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `NC Broad Trafic ${Date.now()}`,
-          object_story_spec: {
-            page_id: PAGE_ID,
-            link_data: {
-              link: SITE_URL,
-              message: "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿",
-              name: "NajmCoiff — Grossiste Coiffure & Onglerie",
-              description: "Catalogue complet, paiement à la livraison.",
-              call_to_action: { type: "SHOP_NOW", value: { link: SITE_URL } },
-              picture: `${SITE_URL}/logo-najmcoiff-og.jpg`,
-            },
-          },
-          access_token: process.env.META_MARKETING_TOKEN,
-        }),
-      }).then(r => r.json());
-      out.fallback_creative = fallbackCreative;
-
-      if (fallbackCreative.id) {
-        adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: "NC — Broad Trafic — Ad",
-            adset_id: adsetRes.id,
-            creative: { creative_id: fallbackCreative.id },
-            status: "ACTIVE",
-            access_token: process.env.META_MARKETING_TOKEN,
-          }),
-        }).then(r => r.json());
-        out.ad_fallback = adRes;
-        out.steps.push(adRes.id ? `Ad fallback créée: ${adRes.id}` : `ERREUR ad fallback: ${adRes.error?.error_user_msg || adRes.error?.message}`);
-      } else {
-        out.steps.push(`ERREUR creative fallback: ${fallbackCreative.error?.error_user_msg || fallbackCreative.error?.message}`);
-      }
-    }
+    // 5. Creative + ad — toujours du neuf, jamais de réutilisation
+    const adResult = await createBroadAdInAdset(adsetRes.id, { PAGE_ID, AD_ACCOUNT, SITE_URL, AD_IMAGE, META_TOKEN });
+    out.creative = adResult.creative;
+    out.ad       = adResult.ad;
+    adResult.steps.forEach(s => out.steps.push(s));
+    if (!adResult.ad?.id) return NextResponse.json({ ok: false, ...out }, { status: 500 });
 
     out.summary = {
       campaign_id: campRes.id,
       adset_id:    adsetRes.id,
-      ad_id:       adRes?.id || null,
+      ad_id:       adResult.ad.id,
+      creative_id: adResult.creative?.id,
       objective:   "OUTCOME_TRAFFIC",
       optim:       "LANDING_PAGE_VIEWS",
-      targeting:   "DZ femmes 20-55 — broad — FB feed/story",
+      targeting:   "DZ femmes 20-65 — Advantage Audience — FB feed/story",
       daily_budget_eur_cents: dailyBudget,
     };
-    return NextResponse.json({ ok: !!adRes?.id, ...out });
+    return NextResponse.json({ ok: true, ...out });
+  }
+
+  // ─── Réparer un adset cassé : archive l'ad WITH_ISSUES + en crée une fraîche ─
+  // Use case : `create_broad_traffic` a déjà créé campaign+adset, mais l'ad a
+  // hérité d'un creative défectueux (code 2490424). On garde adset, on remet
+  // une ad propre avec link_data neuf.
+  if (action === "recreate_broad_ad") {
+    const adsetId = body.adset_id;
+    if (!adsetId) return NextResponse.json({ error: "adset_id requis" }, { status: 400 });
+    const PAGE_ID    = "108762367616665";
+    const AD_ACCOUNT = "act_880775160439589";
+    const SITE_URL   = "https://www.najmcoiff.com";
+    const AD_IMAGE   = `${SITE_URL}/hero-coiffure.png`;
+    const META_TOKEN = process.env.META_MARKETING_TOKEN;
+    const out = { steps: [] };
+
+    // Pré-vérification image
+    try {
+      const h = await fetch(AD_IMAGE, { method: "HEAD" });
+      const len = parseInt(h.headers.get("content-length") || "0", 10);
+      if (!h.ok || len < 1000) {
+        out.steps.push(`ERREUR image: HTTP ${h.status}, size=${len}`);
+        return NextResponse.json({ ok: false, ...out }, { status: 500 });
+      }
+    } catch (e) {
+      out.steps.push(`ERREUR image: ${e.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+
+    // 1. Lister les ads existantes de l'adset (pour archivage)
+    const adsRes = await meta(`${adsetId}/ads`, { fields: "id,name,status,effective_status" });
+    out.existing_ads = adsRes.data || [];
+
+    // 2. Archiver toutes les ads bloquées / WITH_ISSUES
+    const archived = [];
+    for (const ad of (adsRes.data || [])) {
+      if (ad.effective_status === "WITH_ISSUES" || ad.status === "PAUSED") {
+        const del = await fetch(`https://graph.facebook.com/v21.0/${ad.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: META_TOKEN }),
+        }).then(r => r.json());
+        archived.push({ id: ad.id, name: ad.name, deleted: !!del.success, error: del.error?.message });
+      }
+    }
+    out.archived = archived;
+    out.steps.push(`${archived.filter(a => a.deleted).length}/${archived.length} ads cassées archivées`);
+
+    // 3. Créer une nouvelle ad propre dans l'adset
+    const adResult = await createBroadAdInAdset(adsetId, { PAGE_ID, AD_ACCOUNT, SITE_URL, AD_IMAGE, META_TOKEN });
+    out.creative = adResult.creative;
+    out.ad       = adResult.ad;
+    adResult.steps.forEach(s => out.steps.push(s));
+    return NextResponse.json({ ok: !!adResult.ad?.id, ...out });
   }
 
   // Inspection rapide d'IDs arbitraires (campaign / adset / ad)
@@ -828,5 +891,5 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ...out });
   }
 
-  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | inspect_ids" }, { status: 400 });
+  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | recreate_broad_ad | inspect_ids" }, { status: 400 });
 }
