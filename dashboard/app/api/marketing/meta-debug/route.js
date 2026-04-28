@@ -807,5 +807,26 @@ export async function POST(req) {
     return NextResponse.json({ ok: !!adRes?.id, ...out });
   }
 
-  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic" }, { status: 400 });
+  // Inspection rapide d'IDs arbitraires (campaign / adset / ad)
+  if (action === "inspect_ids") {
+    const out = {};
+    if (body.campaign_id) {
+      out.campaign = await meta(body.campaign_id, {
+        fields: "id,name,status,effective_status,issues_info,objective,daily_budget,is_adset_budget_sharing_enabled"
+      });
+    }
+    if (body.adset_id) {
+      out.adset = await meta(body.adset_id, {
+        fields: "id,name,status,effective_status,issues_info,daily_budget,optimization_goal,billing_event,bid_strategy,destination_type,targeting"
+      });
+    }
+    if (body.ad_id) {
+      out.ad = await meta(body.ad_id, {
+        fields: "id,name,status,effective_status,issues_info,creative{id,name,object_type}"
+      });
+    }
+    return NextResponse.json({ ok: true, ...out });
+  }
+
+  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | inspect_ids" }, { status: 400 });
 }
