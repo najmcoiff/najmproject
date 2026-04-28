@@ -870,14 +870,14 @@ export async function POST(req) {
     return NextResponse.json({ ok: !!adResult.ad?.id, ...out });
   }
 
-  // Lister les posts publiés de la Page Facebook (utile quand l'app FB est en
-  // mode développement et qu'on ne peut pas créer un creative link_data via API
-  // → on doit pointer vers un Page Post existant via object_story_id)
+  // Lister les posts promotables de la Page (utilise act_*/promotable_posts qui
+  // accepte le User/Marketing token — contrairement à /{page_id}/posts qui
+  // exige un Page Access Token).
   if (action === "list_page_posts") {
-    const PAGE_ID = "108762367616665";
-    const res = await meta(`${PAGE_ID}/posts`, {
-      fields: "id,message,full_picture,permalink_url,is_published,is_eligible_for_promotion,attachments{type,media_type,url,subattachments}",
-      limit: "20",
+    const ACCT = "act_880775160439589";
+    const res = await meta(`${ACCT}/promotable_posts`, {
+      fields: "id,message,full_picture,permalink_url,is_eligible_for_promotion,created_time,object_id",
+      limit: "30",
     });
     return NextResponse.json({ ok: true, ...res });
   }
