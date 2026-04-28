@@ -61,6 +61,57 @@ export async function GET(req) {
     results.insights.push({ campaign_id: id, data: ins.data, error: ins.error });
   }
 
+  // Insights jour-par-jour (today + yesterday + last 3d) — ciblé pour le diag
+  results.insights_daily = [];
+  for (const id of CAMP_IDS) {
+    const ins = await meta(`${id}/insights`, {
+      fields: "campaign_name,impressions,clicks,spend,reach",
+      date_preset: "last_3d",
+      time_increment: "1",
+    });
+    results.insights_daily.push({ campaign_id: id, data: ins.data || [], error: ins.error });
+  }
+
+  // Account-level delivery_estimate + spend total + transactions billing
+  results.account_insights_today = await meta(`${ACCOUNT}/insights`, {
+    fields: "spend,impressions,clicks",
+    date_preset: "today",
+  });
+  results.account_insights_yesterday = await meta(`${ACCOUNT}/insights`, {
+    fields: "spend,impressions,clicks",
+    date_preset: "yesterday",
+  });
+
+  // Historique des transactions (paiements, refus, débits)
+  results.transactions = await meta(`${ACCOUNT}/transactions`, {
+    fields: "id,status,billing_reason,billing_period,charge_type,time,amount{value,currency},payment_option,vat_invoice_id,product_type,billing_period",
+    limit: "10",
+  });
+
+  // Audiences custom (taille = critique pour retargeting)
+  results.custom_audiences = [];
+  for (const adset of results.adsets) {
+    const t = adset.targeting || {};
+    const audIds = [...((t.custom_audiences || []).map(a => a.id)), ...((t.excluded_custom_audiences || []).map(a => a.id))];
+    for (const audId of audIds) {
+      const aud = await meta(audId, {
+        fields: "id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,delivery_status,operation_status,time_updated"
+      });
+      results.custom_audiences.push({ adset_id: adset.id, audience: aud });
+    }
+  }
+
+  // Pixel — events count 7j (savoir si le pixel reçoit toujours)
+  const PIXEL_ID = "1436593504886973";
+  results.pixel = await meta(PIXEL_ID, {
+    fields: "id,name,last_fired_time,is_unavailable,data_use_setting"
+  });
+  results.pixel_stats = await meta(`${PIXEL_ID}/stats`, {
+    aggregation: "event",
+    start_time: Math.floor(Date.now()/1000) - 7*86400,
+    end_time:   Math.floor(Date.now()/1000),
+  });
+
   // Catalogues produits du Business Manager
   const catalogs = await meta(`301096122408704/owned_product_catalogs`, {
     fields: "id,name,product_count"
