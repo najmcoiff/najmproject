@@ -683,6 +683,7 @@ export async function POST(req) {
         name: `NC — Broad Trafic ${new Date().toISOString().slice(0,10)}`,
         objective: "OUTCOME_TRAFFIC",
         special_ad_categories: [],
+        is_adset_budget_sharing_enabled: false,
         status: "ACTIVE",
         access_token: process.env.META_MARKETING_TOKEN,
       }),
