@@ -717,7 +717,7 @@ export async function POST(req) {
         targeting: {
           geo_locations: { countries: ["DZ"] },
           age_min: 20,
-          age_max: 55,
+          age_max: 65,
           genders: [2],
           publisher_platforms: ["facebook"],
           facebook_positions: ["feed", "story"],
