@@ -870,6 +870,120 @@ export async function POST(req) {
     return NextResponse.json({ ok: !!adResult.ad?.id, ...out });
   }
 
+  // Publier un nouveau post simple (image + lien) sur la Page NajmCoiff via
+  // Page Access Token, puis créer un creative + ad à partir de ce post.
+  // Workaround complet pour le mode dev de l'app FB : on évite la création de
+  // creative link_data direct (bloquée), et on utilise object_story_id.
+  if (action === "publish_post_and_make_ad") {
+    const adsetId    = body.adset_id;
+    if (!adsetId) return NextResponse.json({ error: "adset_id requis" }, { status: 400 });
+    const PAGE_ID    = "108762367616665";
+    const AD_ACCOUNT = "act_880775160439589";
+    const SITE_URL   = "https://www.najmcoiff.com";
+    const AD_IMAGE   = `${SITE_URL}/hero-coiffure.png`;
+    const META_TOKEN = process.env.META_MARKETING_TOKEN;
+    const out = { steps: [] };
+
+    // 1. Récupérer le Page Access Token via le user/marketing token
+    const pageTok = await meta(PAGE_ID, { fields: "access_token,name" });
+    if (!pageTok.access_token) {
+      out.page_token_error = pageTok.error || pageTok;
+      out.steps.push(`ERREUR récupération Page Access Token: ${pageTok.error?.message || "non disponible"}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Page Access Token OK pour "${pageTok.name}"`);
+
+    // 2. Pré-vérifier l'image
+    try {
+      const h = await fetch(AD_IMAGE, { method: "HEAD" });
+      const len = parseInt(h.headers.get("content-length") || "0", 10);
+      if (!h.ok || len < 1000) {
+        out.steps.push(`ERREUR image: HTTP ${h.status}, size=${len}`);
+        return NextResponse.json({ ok: false, ...out }, { status: 500 });
+      }
+    } catch (e) {
+      out.steps.push(`ERREUR image: ${e.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+
+    // 3. Publier un post sur la Page avec image + lien (utilise Page Access Token)
+    const postRes = await fetch(`https://graph.facebook.com/v21.0/${PAGE_ID}/feed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿\n\nCatalogue complet : " + SITE_URL,
+        link: SITE_URL,
+        picture: AD_IMAGE,
+        published: true,
+        access_token: pageTok.access_token,
+      }),
+    }).then(r => r.json());
+    out.post = postRes;
+    if (!postRes.id) {
+      out.steps.push(`ERREUR post Page: ${postRes.error?.error_user_msg || postRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Post Page créé: ${postRes.id}`);
+
+    // 4. Archiver les ads cassées de l'adset cible
+    const adsRes = await meta(`${adsetId}/ads`, { fields: "id,name,status,effective_status" });
+    const archived = [];
+    for (const ad of (adsRes.data || [])) {
+      if (ad.effective_status === "WITH_ISSUES" || ad.status === "PAUSED") {
+        const del = await fetch(`https://graph.facebook.com/v21.0/${ad.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: META_TOKEN }),
+        }).then(r => r.json());
+        archived.push({ id: ad.id, deleted: !!del.success });
+      }
+    }
+    out.archived = archived;
+    out.steps.push(`${archived.filter(a => a.deleted).length}/${archived.length} ads cassées archivées`);
+
+    // 5. Créer le creative depuis le post (object_story_id)
+    const creativeRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `NC Broad Trafic post ${Date.now()}`,
+        object_story_id: postRes.id,
+        access_token: META_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.creative = creativeRes;
+    if (!creativeRes.id) {
+      out.steps.push(`ERREUR creative: ${creativeRes.error?.error_user_msg || creativeRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Creative créé: ${creativeRes.id}`);
+
+    // 6. Créer l'ad active
+    const adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NC — Broad Trafic — Ad",
+        adset_id: adsetId,
+        creative: { creative_id: creativeRes.id },
+        status: "ACTIVE",
+        access_token: META_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.ad = adRes;
+    if (!adRes.id) {
+      out.steps.push(`ERREUR ad: ${adRes.error?.error_user_msg || adRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Ad créée: ${adRes.id}`);
+    out.summary = {
+      post_id:     postRes.id,
+      creative_id: creativeRes.id,
+      ad_id:       adRes.id,
+    };
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // Lister les posts promotables de la Page (utilise act_*/promotable_posts qui
   // accepte le User/Marketing token — contrairement à /{page_id}/posts qui
   // exige un Page Access Token).
@@ -973,5 +1087,5 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ...out });
   }
 
-  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | recreate_broad_ad | recreate_broad_ad_from_post | list_page_posts | inspect_ids" }, { status: 400 });
+  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | recreate_broad_ad | recreate_broad_ad_from_post | publish_post_and_make_ad | list_page_posts | inspect_ids" }, { status: 400 });
 }
