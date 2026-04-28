@@ -133,7 +133,7 @@ L'IA exécute le SQL elle-même. Ne JAMAIS demander à l'utilisateur d'exécuter
 ## STRUCTURE DU PROJET
 
 ```
-MonProjetAppsScript/
+najmproject/
 ├── JOURNAL.md          ← seul fichier humain (français, lu par owner)
 ├── README.md           ← présentation projet 1 page
 ├── AGENTS.md           ← ce fichier (technique, pour IA)

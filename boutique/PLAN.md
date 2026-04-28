@@ -2003,7 +2003,7 @@ DASHBOARD_SECRET         # remplacé par BOUTIQUE_SECRET
 
 **Déployer la boutique :**
 ```powershell
-cd "C:\Users\Informatics\Desktop\MonProjetAppsScript\nc-boutique"
+cd "C:\Users\Informatics\Desktop\najmproject\nc-boutique"
 npx vercel --token [TOKEN] --prod --yes --scope "najm-webs-projects"
 ```
 
