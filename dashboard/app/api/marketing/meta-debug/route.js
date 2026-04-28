@@ -906,24 +906,30 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, ...out }, { status: 500 });
     }
 
-    // 3. Publier un post sur la Page avec image + lien (utilise Page Access Token)
-    const postRes = await fetch(`https://graph.facebook.com/v21.0/${PAGE_ID}/feed`, {
+    // 3. Publier un photo-post sur la Page (Meta n'autorise plus picture/name
+    //    sur /feed depuis 2018 — il faut passer par /photos pour avoir une
+    //    image custom sans dépendre des OG tags du site).
+    const caption = `Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿\n\nCatalogue complet : ${SITE_URL}`;
+    const photoRes = await fetch(`https://graph.facebook.com/v21.0/${PAGE_ID}/photos`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿\n\nCatalogue complet : " + SITE_URL,
-        link: SITE_URL,
-        picture: AD_IMAGE,
+        url: AD_IMAGE,
+        caption,
         published: true,
         access_token: pageTok.access_token,
       }),
     }).then(r => r.json());
-    out.post = postRes;
-    if (!postRes.id) {
-      out.steps.push(`ERREUR post Page: ${postRes.error?.error_user_msg || postRes.error?.message}`);
+    if (!photoRes.id) {
+      out.photo = photoRes;
+      out.steps.push(`ERREUR photo: ${photoRes.error?.error_user_msg || photoRes.error?.message}`);
       return NextResponse.json({ ok: false, ...out }, { status: 500 });
     }
-    out.steps.push(`Post Page créé: ${postRes.id}`);
+    out.photo = { id: photoRes.id, post_id: photoRes.post_id };
+    out.steps.push(`Photo Page créée: photo_id=${photoRes.id} post_id=${photoRes.post_id}`);
+
+    // L'object_story_id pour creative = post_id (PageID_PostID), pas photo_id
+    const postId = photoRes.post_id;
 
     // 4. Archiver les ads cassées de l'adset cible
     const adsRes = await meta(`${adsetId}/ads`, { fields: "id,name,status,effective_status" });
@@ -941,13 +947,13 @@ export async function POST(req) {
     out.archived = archived;
     out.steps.push(`${archived.filter(a => a.deleted).length}/${archived.length} ads cassées archivées`);
 
-    // 5. Créer le creative depuis le post (object_story_id)
+    // 5. Créer le creative depuis le photo-post (object_story_id)
     const creativeRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: `NC Broad Trafic post ${Date.now()}`,
-        object_story_id: postRes.id,
+        object_story_id: postId,
         access_token: META_TOKEN,
       }),
     }).then(r => r.json());
@@ -977,7 +983,8 @@ export async function POST(req) {
     }
     out.steps.push(`Ad créée: ${adRes.id}`);
     out.summary = {
-      post_id:     postRes.id,
+      photo_id:    photoRes.id,
+      post_id:     postId,
       creative_id: creativeRes.id,
       ad_id:       adRes.id,
     };
