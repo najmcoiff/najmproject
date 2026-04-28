@@ -947,7 +947,7 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ...out });
   }
 
-  // Inspection rapide d'IDs arbitraires (campaign / adset / ad)
+  // Inspection rapide d'IDs arbitraires (campaign / adset / ad / creative)
   if (action === "inspect_ids") {
     const out = {};
     if (body.campaign_id) {
@@ -962,7 +962,12 @@ export async function POST(req) {
     }
     if (body.ad_id) {
       out.ad = await meta(body.ad_id, {
-        fields: "id,name,status,effective_status,issues_info,creative{id,name,object_type}"
+        fields: "id,name,status,effective_status,issues_info,creative{id,name,object_type,object_story_id,effective_object_story_id}"
+      });
+    }
+    if (body.creative_id) {
+      out.creative = await meta(body.creative_id, {
+        fields: "id,name,object_type,object_story_id,effective_object_story_id,status,product_set_id,template_url,thumbnail_url,object_story_spec"
       });
     }
     return NextResponse.json({ ok: true, ...out });
