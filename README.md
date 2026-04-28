@@ -49,15 +49,16 @@ scripts/    ← automatisations (notify, health-check, migrations)
 
 ---
 
-## 🤖 Travailler avec l'IA (Claude Code dans Cursor)
+## 🤖 Travailler avec l'IA (Claude Code en CLI)
 
-1. Ouvre Cursor + un terminal
-2. Tape :
+1. **Double-clique** sur `lancer-claude.bat` à la racine du projet.
+   → Ça ouvre une fenêtre terminale avec Claude Code en mode totalement autonome (zéro prompt de permission).
+2. Quand Claude est prêt, tape :
    ```
    continue
    ```
-3. L'IA lit `JOURNAL.md` (état du projet) + `TACHES.md` (à faire) et enchaîne tout seule.
-4. Tu reçois une **notification vocale** quand elle a terminé une tâche.
+3. L'IA lit `JOURNAL.md` (état du projet) + `TACHES.md` (à faire) et enchaîne **toute seule** : code, tests, déploiement, mise à jour journal.
+4. Tu reçois une **notification vocale** (son + voix française) quand elle a terminé.
 
 L'IA a une **autorisation permanente** de :
 - modifier le code, déployer, tester, requêter la base

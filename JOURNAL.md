@@ -67,8 +67,9 @@ Pour me lancer, tape `continue` dans le chat.
 ## 🔧 Comment je travaille (rappel)
 
 ### Toi (owner)
+- **Pour me lancer** : double-clique sur `lancer-claude.bat` à la racine. Ça ouvre Claude Code en mode autonome (zéro prompt).
+- Une fois que je suis prêt, tu tapes `continue` + Entrée
 - Tu lis ce fichier (`JOURNAL.md`) quand tu veux savoir où on en est
-- Tu tapes `continue` dans Cursor pour me lancer
 - Tu reçois une notification (son + voix française) quand j'ai fini
 - Tu n'as **rien** à valider entre les étapes — j'enchaîne
 
