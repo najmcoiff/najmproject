@@ -647,5 +647,156 @@ export async function POST(req) {
     return NextResponse.json({ ok: results.ads?.every(a => a.success), ...results });
   }
 
-  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads" }, { status: 400 });
+  // ─── Créer une campagne broad pour ramener du trafic et nourrir le pixel ─────
+  // Use case : retargeting bloqué (audience trop petite) → broad TRAFFIC en
+  // parallèle pour générer des landing-page views, grossir l'audience pixel
+  // et permettre au retargeting existant de redémarrer plus tard.
+  if (action === "create_broad_traffic") {
+    const PAGE_ID    = "108762367616665";
+    const AD_ACCOUNT = "act_880775160439589";
+    const SITE_URL   = "https://www.najmcoiff.com";
+    const out = { steps: [] };
+
+    // 1. Récupérer le budget des adsets existants pour s'aligner
+    const refAdset = await meta(ADSET_IDS[0], { fields: "daily_budget,bid_strategy" });
+    const dailyBudget = body.daily_budget || refAdset.daily_budget || 500;
+    out.daily_budget_used = dailyBudget;
+    out.steps.push(`Daily budget = ${dailyBudget} (cents EUR)`);
+
+    // 2. Récupérer un creative_id existant d'une ad active pour le réutiliser
+    let creativeId = null;
+    for (const campId of CAMP_IDS) {
+      const ads = await meta(`${campId}/ads`, { fields: "id,creative{id}" });
+      for (const ad of (ads.data || [])) {
+        if (ad.creative?.id) { creativeId = ad.creative.id; break; }
+      }
+      if (creativeId) break;
+    }
+    out.reused_creative_id = creativeId;
+    out.steps.push(creativeId ? `Creative existant réutilisé: ${creativeId}` : "Pas de creative existant trouvé — fallback sur creative simple");
+
+    // 3. Créer la campagne broad TRAFFIC
+    const campRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/campaigns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `NC — Broad Trafic ${new Date().toISOString().slice(0,10)}`,
+        objective: "OUTCOME_TRAFFIC",
+        special_ad_categories: [],
+        status: "ACTIVE",
+        access_token: process.env.META_MARKETING_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.campaign = campRes;
+    if (!campRes.id) {
+      out.steps.push(`ERREUR campagne: ${campRes.error?.error_user_msg || campRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Campagne broad créée: ${campRes.id}`);
+
+    // 4. Créer l'adset broad — DZ femmes 20-55, FB only, optim LP views
+    const adsetRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adsets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NC — Broad Trafic — AdSet",
+        campaign_id: campRes.id,
+        daily_budget: dailyBudget,
+        bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+        billing_event: "IMPRESSIONS",
+        optimization_goal: "LANDING_PAGE_VIEWS",
+        destination_type: "WEBSITE",
+        targeting: {
+          geo_locations: { countries: ["DZ"] },
+          age_min: 20,
+          age_max: 55,
+          genders: [2],
+          publisher_platforms: ["facebook"],
+          facebook_positions: ["feed", "story"],
+        },
+        status: "ACTIVE",
+        access_token: process.env.META_MARKETING_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.adset = adsetRes;
+    if (!adsetRes.id) {
+      out.steps.push(`ERREUR adset: ${adsetRes.error?.error_user_msg || adsetRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`AdSet broad créé: ${adsetRes.id}`);
+
+    // 5. Créer l'ad — d'abord essayer le creative existant
+    let adRes = null;
+    if (creativeId) {
+      adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "NC — Broad Trafic — Ad",
+          adset_id: adsetRes.id,
+          creative: { creative_id: creativeId },
+          status: "ACTIVE",
+          access_token: process.env.META_MARKETING_TOKEN,
+        }),
+      }).then(r => r.json());
+      out.ad_attempt_reused = adRes;
+      if (adRes.id) out.steps.push(`Ad créée avec creative existant: ${adRes.id}`);
+      else          out.steps.push(`Creative existant rejeté: ${adRes.error?.error_user_msg || adRes.error?.message} → fallback`);
+    }
+
+    // Fallback : creative simple link_data pointant homepage (logo statique)
+    if (!adRes?.id) {
+      const fallbackCreative = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `NC Broad Trafic ${Date.now()}`,
+          object_story_spec: {
+            page_id: PAGE_ID,
+            link_data: {
+              link: SITE_URL,
+              message: "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿",
+              name: "NajmCoiff — Grossiste Coiffure & Onglerie",
+              description: "Catalogue complet, paiement à la livraison.",
+              call_to_action: { type: "SHOP_NOW", value: { link: SITE_URL } },
+              picture: `${SITE_URL}/logo-najmcoiff-og.jpg`,
+            },
+          },
+          access_token: process.env.META_MARKETING_TOKEN,
+        }),
+      }).then(r => r.json());
+      out.fallback_creative = fallbackCreative;
+
+      if (fallbackCreative.id) {
+        adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "NC — Broad Trafic — Ad",
+            adset_id: adsetRes.id,
+            creative: { creative_id: fallbackCreative.id },
+            status: "ACTIVE",
+            access_token: process.env.META_MARKETING_TOKEN,
+          }),
+        }).then(r => r.json());
+        out.ad_fallback = adRes;
+        out.steps.push(adRes.id ? `Ad fallback créée: ${adRes.id}` : `ERREUR ad fallback: ${adRes.error?.error_user_msg || adRes.error?.message}`);
+      } else {
+        out.steps.push(`ERREUR creative fallback: ${fallbackCreative.error?.error_user_msg || fallbackCreative.error?.message}`);
+      }
+    }
+
+    out.summary = {
+      campaign_id: campRes.id,
+      adset_id:    adsetRes.id,
+      ad_id:       adRes?.id || null,
+      objective:   "OUTCOME_TRAFFIC",
+      optim:       "LANDING_PAGE_VIEWS",
+      targeting:   "DZ femmes 20-55 — broad — FB feed/story",
+      daily_budget_eur_cents: dailyBudget,
+    };
+    return NextResponse.json({ ok: !!adRes?.id, ...out });
+  }
+
+  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic" }, { status: 400 });
 }
