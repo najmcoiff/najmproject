@@ -21,6 +21,24 @@ export const metadata = {
     locale: "ar_DZ",
     siteName: "نجم كواف",
     url: "https://www.najmcoiff.com",
+    title: "NajmCoiff — Grossiste Coiffure & Onglerie Algérie",
+    description:
+      "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿. Catalogue complet, paiement à la livraison.",
+    images: [
+      {
+        url: "https://www.najmcoiff.com/hero-coiffure.png",
+        width: 1376,
+        height: 768,
+        alt: "NajmCoiff — Grossiste Coiffure & Onglerie",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NajmCoiff — Grossiste Coiffure & Onglerie Algérie",
+    description:
+      "Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿.",
+    images: ["https://www.najmcoiff.com/hero-coiffure.png"],
   },
 };
 

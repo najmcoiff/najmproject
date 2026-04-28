@@ -906,30 +906,29 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, ...out }, { status: 500 });
     }
 
-    // 3. Publier un photo-post sur la Page (Meta n'autorise plus picture/name
-    //    sur /feed depuis 2018 — il faut passer par /photos pour avoir une
-    //    image custom sans dépendre des OG tags du site).
-    const caption = `Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿\n\nCatalogue complet : ${SITE_URL}`;
-    const photoRes = await fetch(`https://graph.facebook.com/v21.0/${PAGE_ID}/photos`, {
+    // 3. Publier un post lien sur la Page (Meta n'autorise plus picture/name
+    //    sur /feed depuis 2018 — l'image+titre+description proviennent
+    //    automatiquement des OG tags scrapés de SITE_URL). Les OG tags doivent
+    //    donc être présents dans la homepage de la boutique (cf. layout.js).
+    const message = `Découvre tout le matériel coiffure et onglerie pro NajmCoiff — livraison partout en Algérie 🇩🇿\n\nCatalogue complet : ${SITE_URL}`;
+    const postRes = await fetch(`https://graph.facebook.com/v21.0/${PAGE_ID}/feed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        url: AD_IMAGE,
-        caption,
+        message,
+        link: SITE_URL,
         published: true,
         access_token: pageTok.access_token,
       }),
     }).then(r => r.json());
-    if (!photoRes.id) {
-      out.photo = photoRes;
-      out.steps.push(`ERREUR photo: ${photoRes.error?.error_user_msg || photoRes.error?.message}`);
+    if (!postRes.id) {
+      out.post = postRes;
+      out.steps.push(`ERREUR post: ${postRes.error?.error_user_msg || postRes.error?.message}`);
       return NextResponse.json({ ok: false, ...out }, { status: 500 });
     }
-    out.photo = { id: photoRes.id, post_id: photoRes.post_id };
-    out.steps.push(`Photo Page créée: photo_id=${photoRes.id} post_id=${photoRes.post_id}`);
-
-    // L'object_story_id pour creative = post_id (PageID_PostID), pas photo_id
-    const postId = photoRes.post_id;
+    out.post = postRes;
+    out.steps.push(`Post lien Page créé: ${postRes.id}`);
+    const postId = postRes.id;
 
     // 4. Archiver les ads cassées de l'adset cible
     const adsRes = await meta(`${adsetId}/ads`, { fields: "id,name,status,effective_status" });
@@ -983,7 +982,6 @@ export async function POST(req) {
     }
     out.steps.push(`Ad créée: ${adRes.id}`);
     out.summary = {
-      photo_id:    photoRes.id,
       post_id:     postId,
       creative_id: creativeRes.id,
       ad_id:       adRes.id,
