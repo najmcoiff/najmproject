@@ -367,12 +367,20 @@ export default function UtilisateursPage() {
     finally { setDeleting(null); }
   };
 
-  // Determine if current user can delete/modify a given target
+  // Modification du rôle / désactivation : interdites sur soi-même
   const canModify = (targetUser) => {
     if (!canManage) return false;
     const targetRole = (targetUser.role || "").toLowerCase();
     if (targetRole === "owner" && !isOwner) return false;
-    if (targetUser.nom === session?.nom) return false; // cannot modify yourself
+    if (targetUser.nom === session?.nom) return false;
+    return true;
+  };
+
+  // Changement de mot de passe : autorisé sur soi-même
+  const canChangePassword = (targetUser) => {
+    if (!canManage) return false;
+    const targetRole = (targetUser.role || "").toLowerCase();
+    if (targetRole === "owner" && !isOwner) return false;
     return true;
   };
 
@@ -515,8 +523,9 @@ export default function UtilisateursPage() {
         ) : (
           <div className="space-y-2 mt-1">
             {filtered.map(user => {
-              const modifiable = canModify(user);
-              const isCurrentUser = user.nom === session?.nom;
+              const modifiable     = canModify(user);
+              const canChangePwd   = canChangePassword(user);
+              const isCurrentUser  = user.nom === session?.nom;
               return (
                 <div key={user.nom}
                   className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3 hover:border-gray-200 transition-colors">
@@ -539,23 +548,29 @@ export default function UtilisateursPage() {
                   </div>
 
                   {/* Actions */}
-                  {modifiable && (
+                  {(modifiable || canChangePwd) && (
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => setChangeRole(user)}
-                        className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors"
-                        title="Modifier le rôle">
-                        ✏️
-                      </button>
-                      <button onClick={() => setChangePwd(user)}
-                        className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors"
-                        title="Changer le mot de passe">
-                        🔑
-                      </button>
-                      <button onClick={() => setConfirm(user)}
-                        className="text-xs px-2.5 py-1.5 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                        title="Désactiver l'utilisateur">
-                        🗑️
-                      </button>
+                      {modifiable && (
+                        <button onClick={() => setChangeRole(user)}
+                          className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors"
+                          title="Modifier le rôle">
+                          ✏️
+                        </button>
+                      )}
+                      {canChangePwd && (
+                        <button onClick={() => setChangePwd(user)}
+                          className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors"
+                          title="Changer le mot de passe">
+                          🔑
+                        </button>
+                      )}
+                      {modifiable && (
+                        <button onClick={() => setConfirm(user)}
+                          className="text-xs px-2.5 py-1.5 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          title="Désactiver l'utilisateur">
+                          🗑️
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
