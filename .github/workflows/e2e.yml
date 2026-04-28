@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "vercel-quick/**"
+      - "dashboard/**"
   # Manual trigger
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: vercel-quick
+        working-directory: dashboard
 
     steps:
       - name: Checkout repository
@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: vercel-quick/package-lock.json
+          cache-dependency-path: dashboard/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_id }}
-          path: vercel-quick/playwright-report/
+          path: dashboard/playwright-report/
           retention-days: 7
 
       - name: Upload screenshots on failure
@@ -61,5 +61,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-screenshots-${{ github.run_id }}
-          path: vercel-quick/test-results/
+          path: dashboard/test-results/
           retention-days: 7

@@ -44,7 +44,12 @@ Thumbs.db
 .idea/
 *.swp
 
+# Claude Code (settings personnels — settings.json reste suivi pour l'équipe)
+.claude/settings.local.json
+**/.claude/settings.local.json
+
 # Fichiers sensibles — clés, tokens, accès systèmes (jamais sur Git)
+secrets/
 creds.json
 docs/CONTROLE_TOTALE.md
 .supabase-config.json

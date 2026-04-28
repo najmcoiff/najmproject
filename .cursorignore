@@ -1,15 +1,32 @@
-# Ignorer les dependances Node.js (700+ Mo inutiles pour l'IA)
+﻿# Dependances — jamais utiles pour l'IA
 node_modules/
-vercel-quick/node_modules/
-nc-boutique/node_modules/
+**/node_modules/
 
-# Ignorer les builds Next.js
-vercel-quick/.next/
-nc-boutique/.next/
-vercel-quick/out/
-nc-boutique/out/
-
-# Ignorer les caches
+# Builds Next.js
+.next/
 **/.next/
+out/
 **/out/
+build/
+dist/
+
+# Rapports Playwright — inutiles pour le code
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+
+# Logs
+*.log
+**/*.log
+
+# Secrets (ne jamais inclure dans le contexte IA)
+.env
+.env.*
+creds.json
+docs/CONTROLE_TOTALE.md
+.supabase-config.json
+
+# Cache divers
 **/.turbo/
+**/.vercel/

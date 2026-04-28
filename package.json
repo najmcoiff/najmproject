@@ -1,4 +1,7 @@
 {
+  "name": "najmcoiff-scripts",
+  "private": true,
+  "description": "Dépendances pour les scripts d'automatisation à la racine (notify, health-check, migrations).",
   "dependencies": {
     "dotenv": "^17.4.1"
   }

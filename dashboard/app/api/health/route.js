@@ -1,13 +1,13 @@
 // GET /api/health
 // Diagnostic complet du système en 1 appel.
-// Teste : Supabase · GAS PING · Shopify · env vars
+// Teste : Supabase + tables + env vars critiques
 // Pas d'auth requise (lecture seule, aucune donnée sensible exposée)
+// Note Phase M4 : GAS + Shopify retirés (archivés en archive/gas-obsolete/).
 
 import { NextResponse } from "next/server";
 
 const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL  || "https://alyxejkdtkdmluvgfnqk.supabase.co";
 const SB_SKEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzWvXYmEucYGijHWl_rBAqFY4h4caFQFMh99AmEqAgi9QMAH5N0xsI0Y-cCge6LCgQ/exec";
 
 async function checkSupabase() {
   try {
@@ -20,31 +20,10 @@ async function checkSupabase() {
   }
 }
 
-async function checkLogRoute() {
-  const required = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
-                    "SHOPIFY_ACCESS_TOKEN", "DASHBOARD_SECRET"];
+async function checkEnvVars() {
+  const required = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "DASHBOARD_SECRET"];
   const missing = required.filter(k => !process.env[k]);
   return { ok: missing.length === 0, missing };
-}
-
-async function checkGAS() {
-  try {
-    const body = JSON.stringify({ source: "DASHBOARD", action: "PING" });
-    const res = await fetch(GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      signal: AbortSignal.timeout(8000),
-      redirect: "follow",
-    });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = null; }
-    if (data?.ok) return { ok: true, ts: data.ts };
-    return { ok: false, status: res.status, hint: text.startsWith("<!") ? "GAS_REDIRECT_HTML" : text.slice(0, 100) };
-  } catch (e) {
-    return { ok: false, error: String(e.message) };
-  }
 }
 
 async function checkTables() {
@@ -66,10 +45,9 @@ async function checkTables() {
 
 export async function GET() {
   const t0 = Date.now();
-  const [supabase, envVars, gas, tables] = await Promise.all([
+  const [supabase, envVars, tables] = await Promise.all([
     checkSupabase(),
-    checkLogRoute(),
-    checkGAS(),
+    checkEnvVars(),
     checkTables(),
   ]);
 
@@ -80,19 +58,12 @@ export async function GET() {
     ok: allOk,
     ts: new Date().toISOString(),
     elapsed_ms: elapsed,
-    checks: {
-      supabase,
-      env_vars: envVars,
-      gas,
-      tables,
-    },
-    // Résumé rapide pour l'IA
+    checks: { supabase, env_vars: envVars, tables },
     summary: allOk
       ? "✅ Tout est opérationnel"
       : `❌ Problèmes détectés : ${[
           !supabase.ok && "Supabase KO",
           !envVars.ok  && `Env vars manquantes: ${envVars.missing?.join(", ")}`,
-          !gas.ok      && `GAS: ${gas.hint || gas.error || "KO"}`,
           !tables.ok   && `Tables: ${tables.failed?.join(", ")}`,
         ].filter(Boolean).join(" | ")}`,
   };
