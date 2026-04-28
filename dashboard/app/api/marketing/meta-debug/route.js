@@ -870,6 +870,83 @@ export async function POST(req) {
     return NextResponse.json({ ok: !!adResult.ad?.id, ...out });
   }
 
+  // Lister les posts publiés de la Page Facebook (utile quand l'app FB est en
+  // mode développement et qu'on ne peut pas créer un creative link_data via API
+  // → on doit pointer vers un Page Post existant via object_story_id)
+  if (action === "list_page_posts") {
+    const PAGE_ID = "108762367616665";
+    const res = await meta(`${PAGE_ID}/posts`, {
+      fields: "id,message,full_picture,permalink_url,is_published,is_eligible_for_promotion,attachments{type,media_type,url,subattachments}",
+      limit: "20",
+    });
+    return NextResponse.json({ ok: true, ...res });
+  }
+
+  // Créer une ad broad en utilisant un Page Post existant (object_story_id) —
+  // contourne le blocage "app en mode développement" sur la création de creative
+  // link_data direct via API.
+  if (action === "recreate_broad_ad_from_post") {
+    const adsetId = body.adset_id;
+    const postId  = body.post_id;
+    if (!adsetId || !postId) return NextResponse.json({ error: "adset_id et post_id requis" }, { status: 400 });
+    const AD_ACCOUNT = "act_880775160439589";
+    const META_TOKEN = process.env.META_MARKETING_TOKEN;
+    const out = { steps: [] };
+
+    // 1. Archive ads bloquées de l'adset
+    const adsRes = await meta(`${adsetId}/ads`, { fields: "id,name,status,effective_status" });
+    const archived = [];
+    for (const ad of (adsRes.data || [])) {
+      if (ad.effective_status === "WITH_ISSUES" || ad.status === "PAUSED") {
+        const del = await fetch(`https://graph.facebook.com/v21.0/${ad.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: META_TOKEN }),
+        }).then(r => r.json());
+        archived.push({ id: ad.id, deleted: !!del.success, error: del.error?.message });
+      }
+    }
+    out.archived = archived;
+    out.steps.push(`${archived.filter(a => a.deleted).length}/${archived.length} ads cassées archivées`);
+
+    // 2. Créer le creative depuis le Page Post
+    const creativeRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/adcreatives`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `NC Broad Trafic post ${Date.now()}`,
+        object_story_id: postId,
+        access_token: META_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.creative = creativeRes;
+    if (!creativeRes.id) {
+      out.steps.push(`ERREUR creative: ${creativeRes.error?.error_user_msg || creativeRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Creative créé depuis post ${postId}: ${creativeRes.id}`);
+
+    // 3. Créer l'ad
+    const adRes = await fetch(`https://graph.facebook.com/v21.0/${AD_ACCOUNT}/ads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NC — Broad Trafic — Ad",
+        adset_id: adsetId,
+        creative: { creative_id: creativeRes.id },
+        status: "ACTIVE",
+        access_token: META_TOKEN,
+      }),
+    }).then(r => r.json());
+    out.ad = adRes;
+    if (!adRes.id) {
+      out.steps.push(`ERREUR ad: ${adRes.error?.error_user_msg || adRes.error?.message}`);
+      return NextResponse.json({ ok: false, ...out }, { status: 500 });
+    }
+    out.steps.push(`Ad créée: ${adRes.id}`);
+    return NextResponse.json({ ok: true, ...out });
+  }
+
   // Inspection rapide d'IDs arbitraires (campaign / adset / ad)
   if (action === "inspect_ids") {
     const out = {};
@@ -891,5 +968,5 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ...out });
   }
 
-  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | recreate_broad_ad | inspect_ids" }, { status: 400 });
+  return NextResponse.json({ error: "Action inconnue. Utiliser: reactivate_ads | refresh_catalog | fix_product_set | duplicate_ads | recreate_ads | create_broad_traffic | recreate_broad_ad | recreate_broad_ad_from_post | list_page_posts | inspect_ids" }, { status: 400 });
 }
