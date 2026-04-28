@@ -1,0 +1,57 @@
+# Dépendances (jamais sur Git — `npm install` sur chaque machine / CI)
+node_modules/
+.pnp
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Next.js / build
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Environnement & secrets (jamais commit)
+.env
+.env.*
+!.env.example
+creds.json
+*.pem
+.env.e2e
+
+# Vercel
+.vercel
+
+# Playwright
+playwright-report/
+test-results/
+/.playwright-auth/
+
+# Logs & cache
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Fichiers sensibles — clés, tokens, accès systèmes (jamais sur Git)
+creds.json
+docs/CONTROLE_TOTALE.md
+.supabase-config.json
+.clasp.json
+.claspignore
+
+# Scripts utilitaires locaux (contiennent des clés en clair — usage local uniquement)
+scripts/
+gas/
+PROMPT.md

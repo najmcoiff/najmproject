@@ -1,0 +1,8 @@
+.next/cache
+.next/dev
+node_modules
+*.log
+playwright-report
+test-results
+tests
+mobile-*.png

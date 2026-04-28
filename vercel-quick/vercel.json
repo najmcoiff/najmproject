@@ -1,0 +1,20 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "crons": [
+    { "path": "/api/ai/catalog-intelligence", "schedule": "0 3 * * *" },
+    { "path": "/api/ai/whatsapp-reactivate", "schedule": "0 9 * * *" },
+    { "path": "/api/ai/whatsapp-abandon-cart", "schedule": "0 11 * * *" },
+    { "path": "/api/ai/whatsapp-post-delivery", "schedule": "0 10 * * *" },
+    { "path": "/api/ai/campaign-optimize", "schedule": "0 4 * * *" },
+    { "path": "/api/marketing/sync-stats", "schedule": "50 7 * * *" },
+    { "path": "/api/marketing/wati-sync-status", "schedule": "0 8 * * *" },
+    { "path": "/api/marketing/meta-health", "schedule": "30 6 * * *" },
+    { "path": "/api/ai/generate-content", "schedule": "0 6 * * *" },
+    { "path": "/api/ai/stock-forecast", "schedule": "0 5 * * 1" },
+    { "path": "/api/ai/daily-report", "schedule": "0 8 * * *" },
+    { "path": "/api/bi/daily-report", "schedule": "0 19 * * *" },
+    { "path": "/api/bi/snapshot",     "schedule": "55 22 * * *" }
+  ]
+}

@@ -1,0 +1,15 @@
+# Ignorer les dependances Node.js (700+ Mo inutiles pour l'IA)
+node_modules/
+vercel-quick/node_modules/
+nc-boutique/node_modules/
+
+# Ignorer les builds Next.js
+vercel-quick/.next/
+nc-boutique/.next/
+vercel-quick/out/
+nc-boutique/out/
+
+# Ignorer les caches
+**/.next/
+**/out/
+**/.turbo/

@@ -1,0 +1,65 @@
+name: E2E Tests — Playwright
+
+on:
+  # Run after every push to main or after Vercel deploy
+  push:
+    branches: [main]
+    paths:
+      - "vercel-quick/**"
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to test against (leave empty for production)"
+        required: false
+        default: "https://najmcoiffdashboard.vercel.app"
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: vercel-quick
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vercel-quick/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        env:
+          E2E_BASE_URL: ${{ inputs.base_url || 'https://najmcoiffdashboard.vercel.app' }}
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: npx playwright test --project=setup --project=chromium --project=auth
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: vercel-quick/playwright-report/
+          retention-days: 7
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-${{ github.run_id }}
+          path: vercel-quick/test-results/
+          retention-days: 7

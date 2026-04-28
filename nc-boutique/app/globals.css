@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* ── Palette NajmCoiff ─────────────────────────── */
+    --color-bg:        #0a0a0a;
+    --color-bg-card:   #161616;
+    --color-bg-input:  #1e1e1e;
+    --color-accent:    #e63012;
+    --color-accent-hover: #c4250e;
+    --color-text:      #f5f5f5;
+    --color-text-muted:#a0a0a0;
+    --color-border:    #2a2a2a;
+    --color-success:   #22c55e;
+    --color-warning:   #f59e0b;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  body {
+    font-family: 'Noto Kufi Arabic', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    overflow-x: clip; /* clip (pas hidden) pour contenir les éléments fixed+transform sans décaler le layout */
+    width: 100%;
+    max-width: 100vw;
+    position: relative;
+  }
+
+  input, select, textarea {
+    font-size: 16px; /* évite le zoom automatique iOS */
+  }
+
+  /* Scrollbar discrète sur fond sombre */
+  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track  { background: var(--color-bg); }
+  ::-webkit-scrollbar-thumb  { background: var(--color-border); border-radius: 3px; }
+}
+
+@layer utilities {
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Blocs de texte arabes — alignement droite dans un layout LTR */
+  .arabic-text {
+    direction: rtl;
+    text-align: right;
+    unicode-bidi: embed;
+  }
+
+  /* Noms produits en LTR (français) */
+  .product-title {
+    direction: ltr;
+    text-align: right;
+    unicode-bidi: embed;
+  }
+
+  /* Accent rouge réutilisable */
+  .text-accent   { color: var(--color-accent); }
+  .bg-accent     { background-color: var(--color-accent); }
+  .border-accent { border-color: var(--color-accent); }
+
+  /* Police display FR — Bebas Neue */
+  .font-bebas {
+    font-family: 'Bebas Neue', 'Impact', sans-serif;
+  }
+
+  /* Ticker bannière animée — seamless */
+  @keyframes ticker-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .ticker-track {
+    animation: ticker-scroll 28s linear infinite;
+    width: max-content;
+  }
+
+  .ticker-bar:hover .ticker-track {
+    animation-play-state: paused;
+  }
+
+  /* Masquer la scrollbar tout en gardant le scroll actif (AWAKHIR row) */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Animations boutons flottants ──────────────────────────── */
+
+  /* Bounce panier quand article ajouté */
+  @keyframes cart-bounce-anim {
+    0%   { transform: scale(1) rotate(0deg); }
+    15%  { transform: scale(1.4) rotate(-10deg); }
+    30%  { transform: scale(1.25) rotate(8deg); }
+    45%  { transform: scale(1.35) rotate(-6deg); }
+    60%  { transform: scale(1.2) rotate(4deg); }
+    75%  { transform: scale(1.1) rotate(-2deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  .cart-icon-bounce {
+    animation: cart-bounce-anim 0.7s cubic-bezier(.36,.07,.19,.97) both;
+  }
+
+  /* +1 qui monte et disparaît */
+  @keyframes plus-one-float {
+    0%   { opacity: 1; transform: translate(-50%, 0); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -28px); }
+  }
+
+  .cart-plus-one {
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: plus-one-float 1.0s ease-out forwards;
+  }
+
+  /* Anneau pulsant panier */
+  @keyframes cart-ring-pulse {
+    0%   { transform: scale(1);   opacity: 0.7; }
+    70%  { transform: scale(1.5); opacity: 0; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .cart-ring-pulse {
+    animation: cart-ring-pulse 2s ease-out infinite;
+  }
+
+  /* Anneau pulsant WhatsApp */
+  @keyframes wa-ring-pulse {
+    0%   { transform: scale(1);   opacity: 0.6; }
+    70%  { transform: scale(1.45); opacity: 0; }
+    100% { transform: scale(1.45); opacity: 0; }
+  }
+
+  .wa-ring-anim {
+    animation: wa-ring-pulse 2.4s ease-out infinite;
+  }
+}
