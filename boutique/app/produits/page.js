@@ -107,13 +107,19 @@ export default function CataloguePage() {
   }
 
   function handleSearch(val) {
+    // Recherche GLOBALE au monde : dès que l'utilisateur tape un terme, on
+    // retire le filtre catégorie en cours pour que les résultats couvrent
+    // tout coiffure (ou onglerie). L'utilisateur peut être arrivé ici via
+    // une carte « Shampooing » → l'URL contient ?category=… mais la barre
+    // de recherche doit chercher dans tout le monde, pas dans Shampooing seul.
     setSearch(val);
+    setCategory("");
     setOffset(0);
-    syncUrl(val, category);
+    syncUrl(val, "");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       trackSearch(val, 0);
-      fetchProducts({ search: val, offset: 0 });
+      fetchProducts({ search: val, category: "", offset: 0 });
     }, 300);
   }
 

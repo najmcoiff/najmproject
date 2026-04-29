@@ -91,6 +91,33 @@ test.describe("Recherche → lien partageable", () => {
     await ctx.close();
   });
 
+  test("Recherche globale : arriver via /produits?category=X puis taper search efface category", async ({ page }) => {
+    // L'utilisateur clique sur une carte « Shampooing » dans /collections/coiffure
+    // → atterrit sur /produits?category=...&world=coiffure. On simule en lisant
+    // la 1ère catégorie réelle exposée par l'API collections (homepage=true).
+    const cats = await page.request.get("/api/boutique/collections?world=coiffure").then(r => r.json());
+    const firstCat = (cats?.collections || []).find(c => c.title)?.title;
+    test.skip(!firstCat, "Aucune catégorie coiffure disponible — skip");
+
+    const startUrl = `/produits?category=${encodeURIComponent(firstCat)}&world=coiffure`;
+    await page.goto(startUrl);
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(1500);
+
+    // L'URL initiale contient bien category=
+    await expect(page).toHaveURL(/category=/);
+
+    // L'utilisateur tape un terme dans la barre de recherche
+    await humanTypeSearch(page, SEARCH_TERM);
+    await page.waitForTimeout(900);
+
+    // L'URL doit avoir search= MAIS PLUS category=
+    await expect(page).toHaveURL(new RegExp(`search=${SEARCH_TERM}`));
+    const urlAfter = page.url();
+    expect(urlAfter, "category= ne doit plus être dans l'URL après typing search sur /produits").not.toMatch(/category=/);
+    console.log(`✅ Catégorie effacée auto sur /produits → recherche globale: ${urlAfter}`);
+  });
+
   test("Le bouton ✕ remet l'URL propre à /produits", async ({ page }) => {
     await page.goto(`/produits?search=${SEARCH_TERM}`);
     await page.waitForLoadState("domcontentloaded");
