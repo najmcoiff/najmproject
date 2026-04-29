@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Image from "next/image";
@@ -12,7 +11,6 @@ import { openCart } from "@/components/CartDrawer";
 import Link from "next/link";
 
 export default function CataloguePage() {
-  const router = useRouter();
   const [products, setProducts]   = useState([]);
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(true);
@@ -93,7 +91,9 @@ export default function CataloguePage() {
 
   // Synchronise l'URL avec les filtres actuels — permet de copier-coller
   // l'URL comme un lien partageable (parité avec l'ancienne boutique Shopify).
-  // router.replace pour ne pas polluer l'historique browser.
+  // window.history.replaceState : synchrone, browser-natif, ne déclenche pas
+  // de re-render Next (on gère l'état localement). Préféré à router.replace
+  // qui peut être batché/différé en build prod.
   function syncUrl(searchVal, categoryVal) {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams();
@@ -102,7 +102,7 @@ export default function CataloguePage() {
     const qs   = params.toString();
     const next = qs ? `/produits?${qs}` : "/produits";
     if (window.location.pathname + window.location.search !== next) {
-      router.replace(next, { scroll: false });
+      window.history.replaceState({}, "", next);
     }
   }
 
