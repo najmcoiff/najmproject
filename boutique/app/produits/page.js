@@ -125,6 +125,17 @@ export default function CataloguePage() {
     fetchProducts({ category: val, offset: 0 });
   }
 
+  // Reset complet — un seul syncUrl pour éviter les closures stale qui
+  // re-injecteraient l'ancienne valeur de search/category l'une après l'autre.
+  function handleClear() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearch("");
+    setCategory("");
+    setOffset(0);
+    syncUrl("", "");
+    fetchProducts({ search: "", category: "", offset: 0 });
+  }
+
   async function handleCopyLink() {
     if (typeof window === "undefined") return;
     const url = window.location.href;
@@ -249,7 +260,7 @@ export default function CataloguePage() {
               </div>
               {(category || search) && (
                 <button
-                  onClick={() => { handleSearch(""); handleCategory(""); }}
+                  onClick={handleClear}
                   className="text-xs px-2.5 py-2 rounded-lg transition-colors shrink-0"
                   style={{ color: "#e63012", border: "1px solid #e6301244", background: "#e6301211" }}
                 >
