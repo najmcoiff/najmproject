@@ -24,6 +24,7 @@ export default function CataloguePage() {
   const [world, setWorld]         = useState("coiffure");
   const [awakhir, setAwakhir]     = useState([]);
   const [isFuzzy, setIsFuzzy]     = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { addToCart }             = useCart();
   const debounceRef               = useRef(null);
 
@@ -90,9 +91,25 @@ export default function CataloguePage() {
       .catch(() => {});
   }, []);
 
+  // Synchronise l'URL avec les filtres actuels — permet de copier-coller
+  // l'URL comme un lien partageable (parité avec l'ancienne boutique Shopify).
+  // router.replace pour ne pas polluer l'historique browser.
+  function syncUrl(searchVal, categoryVal) {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (searchVal)   params.set("search",   searchVal);
+    if (categoryVal) params.set("category", categoryVal);
+    const qs   = params.toString();
+    const next = qs ? `/produits?${qs}` : "/produits";
+    if (window.location.pathname + window.location.search !== next) {
+      router.replace(next, { scroll: false });
+    }
+  }
+
   function handleSearch(val) {
     setSearch(val);
     setOffset(0);
+    syncUrl(val, category);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       trackSearch(val, 0);
@@ -103,8 +120,34 @@ export default function CataloguePage() {
   function handleCategory(val) {
     setCategory(val);
     setOffset(0);
+    syncUrl(search, val);
     trackFilterApplied("category", val);
     fetchProducts({ category: val, offset: 0 });
+  }
+
+  async function handleCopyLink() {
+    if (typeof window === "undefined") return;
+    const url = window.location.href;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback navigateurs anciens / contextes non-https
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Si tout échoue, ouvrir un prompt pour copie manuelle
+      window.prompt("نسخ الرابط:", url);
+    }
   }
 
   function handleSort(val) {
@@ -214,6 +257,32 @@ export default function CataloguePage() {
                 </button>
               )}
             </div>
+          )}
+
+          {/* Bouton copier-le-lien — visible dès qu'un filtre est actif */}
+          {(search || category) && (
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="text-xs px-3 py-2 rounded-lg transition-colors shrink-0 flex items-center gap-1.5 whitespace-nowrap"
+              style={{
+                color: linkCopied ? "#0e9f6e" : accent,
+                border: `1px solid ${linkCopied ? "#0e9f6e44" : accent + "44"}`,
+                background: linkCopied ? "#0e9f6e11" : accent + "11",
+              }}
+              data-testid="copy-search-link"
+              aria-label="نسخ رابط البحث"
+              title="نسخ الرابط"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {linkCopied ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m3-3a4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656" />
+                )}
+              </svg>
+              {linkCopied ? "تم النسخ" : "نسخ الرابط"}
+            </button>
           )}
         </div>
 
