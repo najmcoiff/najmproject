@@ -25,6 +25,7 @@ export default function CollectionsWorldPage() {
   const [search,      setSearch]      = useState("");
   const [category,    setCategory]    = useState("");
   const [isFuzzy,     setIsFuzzy]     = useState(false);
+  const [linkCopied,  setLinkCopied]  = useState(false);
   const { addToCart } = useCart();
   const debounceRef   = useRef(null);
 
@@ -73,31 +74,86 @@ export default function CollectionsWorldPage() {
       .then(d => { if (d.products?.length) setAwakhir(d.products); })
       .catch(() => {});
 
-    loadProducts({ offset: 0 });
+    // Lire les params URL (?search / ?category) pour permettre un lien partageable
+    let urlSearch = "";
+    let urlCategory = "";
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      urlSearch   = p.get("search")   || "";
+      urlCategory = p.get("category") || "";
+      if (urlSearch)   setSearch(urlSearch);
+      if (urlCategory) setCategory(urlCategory);
+    }
+    loadProducts({ offset: 0, search: urlSearch, category: urlCategory });
   }, [world]);
 
+  // Synchronise l'URL avec les filtres actuels (parité avec /produits) —
+  // permet de copier le lien et de l'envoyer aux clients.
+  function syncUrl(searchVal, categoryVal) {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (searchVal)   params.set("search",   searchVal);
+    if (categoryVal) params.set("category", categoryVal);
+    const qs   = params.toString();
+    const next = `/collections/${world}${qs ? "?" + qs : ""}`;
+    if (window.location.pathname + window.location.search !== next) {
+      window.history.replaceState({}, "", next);
+    }
+  }
+
   function handleSearch(val) {
+    // La recherche sur la page des collections doit être GLOBALE au monde —
+    // dès que l'utilisateur tape un terme, on retire le filtre catégorie en
+    // cours pour que les résultats couvrent tout coiffure (ou onglerie).
     setSearch(val);
+    setCategory("");
     setOffset(0);
+    syncUrl(val, "");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       trackSearch(val, 0);
-      loadProducts({ search: val, offset: 0, category });
+      loadProducts({ search: val, offset: 0, category: "" });
     }, 300);
   }
 
   function handleCategory(val) {
     setCategory(val);
     setOffset(0);
+    syncUrl(search, val);
     trackFilterApplied("category", val);
     loadProducts({ category: val, offset: 0, search });
   }
 
   function handleReset() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setSearch("");
     setCategory("");
     setOffset(0);
+    syncUrl("", "");
     loadProducts({ search: "", category: "", offset: 0 });
+  }
+
+  async function handleCopyLink() {
+    if (typeof window === "undefined") return;
+    const url = window.location.href;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      window.prompt("نسخ الرابط:", url);
+    }
   }
 
   function handleAddToCart(product, e) {
@@ -215,6 +271,32 @@ export default function CollectionsWorldPage() {
                 </button>
               )}
             </div>
+          )}
+
+          {/* Bouton « نسخ الرابط » — actif dès qu'un filtre est appliqué */}
+          {(search || category) && (
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="text-xs px-3 py-2 rounded-lg transition-colors shrink-0 flex items-center gap-1.5 whitespace-nowrap"
+              style={{
+                color: linkCopied ? "#0e9f6e" : accent,
+                border: `1px solid ${linkCopied ? "#0e9f6e44" : accent + "44"}`,
+                background: linkCopied ? "#0e9f6e11" : accent + "11",
+              }}
+              data-testid="copy-search-link"
+              aria-label="نسخ رابط البحث"
+              title="نسخ الرابط"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {linkCopied ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m3-3a4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656" />
+                )}
+              </svg>
+              {linkCopied ? "تم النسخ" : "نسخ الرابط"}
+            </button>
           )}
         </div>
 
