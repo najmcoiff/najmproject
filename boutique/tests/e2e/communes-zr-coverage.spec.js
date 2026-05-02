@@ -101,6 +101,32 @@ test.describe("Communes — couverture ZR Express complète", () => {
     }
   });
 
+  test("2bis) Aucun doublon orthographique pour les 54 wilayas livrées par ZR", async ({ request }) => {
+    // Le client a explicitement demandé : pas de doublons (genre "Daia Ben Dahoua"
+    // ET "Dhayet Bendhahoua" dans la même wilaya → confusion à la commande).
+    const baseURL = test.info().project.use.baseURL || "https://www.najmcoiff.com";
+    const PRESERVED = new Set([33, 37, 50, 56]); // wilayas sahariennes hors ZR
+    const issues = [];
+    for (let code = 1; code <= 58; code++) {
+      if (PRESERVED.has(code)) continue;
+      const r = await request.get(`${baseURL}/api/boutique/delivery?wilaya_code=${code}&list=communes`);
+      const data = await r.json();
+      const list = Array.isArray(data.communes) ? data.communes : [];
+      // Normalisation : NFD + minuscules + suppression apostrophes/tirets/espaces multiples
+      const normalize = s => String(s||"")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .toLowerCase().replace(/['']/g, "").replace(/-/g, " ").replace(/\s+/g, " ").trim();
+      const seen = new Map();
+      for (const name of list) {
+        const k = normalize(name);
+        if (seen.has(k)) issues.push(`W${code} doublon : "${seen.get(k)}" ↔ "${name}"`);
+        else seen.set(k, name);
+      }
+    }
+    if (issues.length) console.log("Doublons trouvés :\n  " + issues.join("\n  "));
+    expect(issues.length, `Aucun doublon orthographique attendu après réécriture ZR`).toBe(0);
+  });
+
   test("3) Le formulaire /commander expose les communes ajoutées dans le <select>", async ({ page }) => {
     const variant = await getTestVariant();
     await page.goto("/produits");
