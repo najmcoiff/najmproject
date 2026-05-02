@@ -111,12 +111,38 @@ export function trackEvent(eventType, data = {}) {
 // ── Meta Pixel fbq() helper ───────────────────────────────────
 
 /**
+ * S'assure que les pixels exposés par MetaPixel sont init avant de tracker.
+ * (Sécurité : si fireFbq est appelé avant que MetaPixel ait init les pixels,
+ * on les init ici de façon idempotente pour ne perdre aucun event.)
+ */
+function ensurePixelInit() {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  if (!window.__nc_pixels) return;
+  const inited = (window.__nc_pixels_inited ||= new Set());
+  for (const id of Object.values(window.__nc_pixels)) {
+    if (id && !inited.has(id)) {
+      window.fbq("init", id);
+      inited.add(id);
+    }
+  }
+}
+
+/**
  * Fire un événement Meta Pixel via window.fbq().
+ * Cible le pixel du monde courant (coiffure / onglerie) via trackSingle
+ * pour garantir une attribution propre entre les deux comptes Meta.
  * Silencieux si le pixel n'est pas chargé.
  */
 function fireFbq(eventName, params = {}) {
   try {
-    if (typeof window !== "undefined" && typeof window.fbq === "function") {
+    if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+    ensurePixelInit();
+    const world = getWorld();
+    const pixelId = window.__nc_pixels?.[world];
+    if (pixelId) {
+      window.fbq("trackSingle", pixelId, eventName, params);
+    } else {
+      // Fallback : aucun pixel mappé pour ce monde → broadcast classique
       window.fbq("track", eventName, params);
     }
   } catch {
