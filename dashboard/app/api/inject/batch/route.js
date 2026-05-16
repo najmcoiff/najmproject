@@ -114,7 +114,7 @@ export async function POST(request) {
           order_total:        order.order_total    || null,
           date_injection:     now,
           updated_at:         now,
-          link_zr:            `https://track.zrexpress.app/?tracking=${tracking}`,
+          link_zr:            parcel_id ? `https://app.zrexpress.app/parcels/default/${parcel_id}` : "",
         }, { onConflict: "tracking" });
 
         results.push({ order_id: order.order_id, ok: true, tracking });

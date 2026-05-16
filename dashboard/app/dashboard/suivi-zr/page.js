@@ -29,7 +29,9 @@ function fmtDateZR(val) {
 
 function ParcelCard({ snapshot, history }) {
   const { bg, text, dot } = statusColor(snapshot.stateLabel);
-  const zrLink = `https://zrexpress.app/track/${snapshot.trackingNumber}`;
+  const zrLink = snapshot.parcelId
+    ? `https://app.zrexpress.app/parcels/default/${snapshot.parcelId}`
+    : `https://track.zrexpress.app/?tracking=${snapshot.trackingNumber}`;
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
@@ -1329,9 +1331,16 @@ export default function SuiviZRPage() {
                   {selected.order_id && (
                     <div><span className="text-gray-400">Order ID</span><br/><span className="font-mono text-gray-700 text-[10px]">{selected.order_id}</span></div>
                   )}
-                  {selected.link_zr && (
+                  {(selected.parcel_id || selected.link_zr) && (
                     <div className="col-span-2"><span className="text-gray-400">Suivi ZRExpress</span><br/>
-                      <a href={selected.link_zr} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                      <a
+                        href={selected.parcel_id
+                          ? `https://app.zrexpress.app/parcels/default/${selected.parcel_id}`
+                          : selected.link_zr}
+                        target="_blank" rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                        data-testid="zr-parcel-link"
+                      >
                         Voir sur ZRExpress ↗
                       </a>
                     </div>

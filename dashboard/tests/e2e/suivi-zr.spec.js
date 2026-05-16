@@ -249,4 +249,66 @@ test.describe("Page Suivi ZR — navigation et filtres agent", () => {
       await sbDelete("nc_suivi_zr", `tracking=eq.${trackingRecouvert}`);
     }
   });
+
+  // ── T_ZR_LINK-1 : DB — tous les colis avec parcel_id ont link_zr nouveau format ──
+  test("T_ZR_LINK-1 : link_zr pointe vers app.zrexpress.app pour les colis avec parcel_id", async () => {
+    const rows = await sbQuery(
+      "nc_suivi_zr",
+      "select=tracking,parcel_id,link_zr&parcel_id=not.is.null&limit=2000"
+    );
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length, "Des colis avec parcel_id doivent exister").toBeGreaterThan(0);
+
+    const oldFormat = rows.filter(r => /^https:\/\/track\.zrexpress\.app/i.test(r.link_zr || ""));
+    const newFormat = rows.filter(r => /^https:\/\/app\.zrexpress\.app\/parcels\/default\//i.test(r.link_zr || ""));
+    console.log(`Total avec parcel_id : ${rows.length} | nouveau format : ${newFormat.length} | ancien track : ${oldFormat.length}`);
+
+    expect(oldFormat.length, "Aucun colis avec parcel_id ne doit avoir l'ancien link track.zrexpress.app").toBe(0);
+    expect(newFormat.length, "La majorité doit pointer vers app.zrexpress.app/parcels/default/{uuid}").toBeGreaterThan(0);
+
+    // Vérifier que l'UUID dans le link_zr correspond bien au parcel_id
+    const mismatches = newFormat.filter(r => !r.link_zr.endsWith(r.parcel_id));
+    expect(mismatches.length, "UUID dans link_zr doit correspondre à parcel_id").toBe(0);
+  });
+
+  // ── T_ZR_LINK-2 : UI — lien "Voir sur ZRExpress" pointe vers app.zrexpress.app ──
+  test("T_ZR_LINK-2 : clic sur un colis avec parcel_id → lien admin ZR correct", async ({ authedPage }) => {
+    // Trouver un colis actif avec parcel_id pour cliquer dessus
+    const rows = await sbQuery(
+      "nc_suivi_zr",
+      "select=tracking,parcel_id,customer_name&parcel_id=not.is.null&final_status=is.null&order=date_injection.desc&limit=5"
+    );
+    if (!rows?.length) { console.log("⚠️  Aucun colis actif avec parcel_id"); return; }
+
+    const target = rows[0];
+    console.log(`Cible : tracking=${target.tracking} parcel_id=${target.parcel_id}`);
+
+    await authedPage.goto("/dashboard/suivi-zr");
+    await authedPage.waitForSelector("body", { timeout: 15000 });
+    await authedPage.waitForTimeout(5000); // chargement liste
+
+    // Chercher la card par tracking dans la liste et cliquer
+    const searchInput = authedPage.locator('input[type="text"], input[type="search"]').first();
+    const hasSearch = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasSearch) {
+      await searchInput.fill(target.tracking);
+      await authedPage.waitForTimeout(1500);
+    }
+
+    // Cliquer sur l'élément de la liste qui contient le tracking
+    const trackingHit = authedPage.getByText(target.tracking, { exact: false }).first();
+    await expect(trackingHit, "Card du colis cible visible").toBeVisible({ timeout: 10000 });
+    await trackingHit.click();
+    await authedPage.waitForTimeout(1500);
+
+    // Vérifier le lien
+    const link = authedPage.locator('[data-testid="zr-parcel-link"]').first();
+    await expect(link, "Lien Voir sur ZRExpress visible").toBeVisible({ timeout: 8000 });
+    const href = await link.getAttribute("href");
+    console.log(`href = ${href}`);
+
+    const expected = `https://app.zrexpress.app/parcels/default/${target.parcel_id}`;
+    expect(href, `Lien doit pointer vers ${expected}`).toBe(expected);
+    expect(href, "Lien ne doit PAS être l'ancien track.zrexpress.app").not.toMatch(/track\.zrexpress\.app/);
+  });
 });

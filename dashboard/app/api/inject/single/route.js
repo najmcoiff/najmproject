@@ -106,7 +106,7 @@ export async function POST(request) {
       order_total:        order.order_total      || null,
       date_injection:     now,
       updated_at:         now,
-      link_zr:            parcel_id ? `https://track.zrexpress.app/?tracking=${tracking}` : "",
+      link_zr:            parcel_id ? `https://app.zrexpress.app/parcels/default/${parcel_id}` : "",
     }, { onConflict: "tracking" });
 
     // ── 6. Log nc_events ─────────────────────────────────────────
