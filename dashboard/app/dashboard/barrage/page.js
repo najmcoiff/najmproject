@@ -142,6 +142,7 @@ function ProduitCard({ row, onSave, saving, correctionEvents }) {
     <div
       data-testid="barrage-card"
       data-entered-at={row.entered_at || ""}
+      data-variant-id={String(row.variant_id || "")}
       className={`bg-white rounded-xl border transition-all
         ${verifie ? "border-green-200 opacity-60" : horsBarrage ? "border-yellow-200 opacity-70" : hasCible ? "border-blue-200" : "border-gray-200"}`}
     >

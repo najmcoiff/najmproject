@@ -841,25 +841,34 @@ test.describe("Barrage Supabase-only (T200)", () => {
 
     try {
       await authedPage.goto("/dashboard/barrage");
+      // Invalider le cache localStorage pour forcer la relecture depuis Supabase
+      await authedPage.evaluate(() => { try { localStorage.removeItem("nc_lc_barrage"); } catch (_) {} });
+      await authedPage.reload();
       await authedPage.waitForFunction(() => {
         const spinner = document.querySelector("svg.animate-spin");
         const cards   = document.querySelectorAll("[data-testid='barrage-card']");
         return !spinner && cards.length > 0;
       }, { timeout: 30000 }).catch(() => {});
 
-      // L'article doit apparaître dans Tous
+      // L'article doit apparaître dans Tous (cible par variant_id, pas timestamp ISO)
       const tousBtn = authedPage.locator("[data-testid='filter-tous']");
       await tousBtn.click();
       await authedPage.waitForTimeout(500);
-      const allCards = authedPage.locator(`[data-testid='barrage-card'][data-entered-at="${twoDaysAgo}"]`);
-      const nbInAll = await allCards.count();
+      const targetCard = authedPage.locator(`[data-testid='barrage-card'][data-variant-id="${v.variant_id}"]`);
+      const nbInAll = await targetCard.count();
       console.log(`Article vieilli visible dans Tous : ${nbInAll}`);
       expect(nbInAll, "Article doit toujours être visible dans Tous").toBeGreaterThan(0);
+
+      // Vérifier que sa date est bien la valeur vieillie (peu importe le format ISO retourné)
+      const renderedDate = await targetCard.first().getAttribute("data-entered-at");
+      const renderedAgeMs = Date.now() - new Date(renderedDate).getTime();
+      console.log(`Card data-entered-at="${renderedDate}" age=${Math.round(renderedAgeMs/3600000)}h`);
+      expect(renderedAgeMs, "L'article doit avoir entered_at > 24h").toBeGreaterThan(24 * 60 * 60 * 1000);
 
       // Mais pas dans Aujourd'hui
       await authedPage.locator("[data-testid='filter-today']").click();
       await authedPage.waitForTimeout(500);
-      const nbInToday = await allCards.count();
+      const nbInToday = await targetCard.count();
       console.log(`Article vieilli visible dans Aujourd'hui : ${nbInToday}`);
       expect(nbInToday, "Article avec entered_at >24h doit être exclu de Aujourd'hui").toBe(0);
     } finally {
