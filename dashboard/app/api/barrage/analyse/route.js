@@ -68,7 +68,7 @@ export async function POST(request) {
     while (true) {
       const { data: bPage, error: bErr } = await supabase
         .from("nc_barrage")
-        .select("variant_id,stock_cible,note_agent,balise,verifie,agent,product_title,available")
+        .select("variant_id,stock_cible,note_agent,balise,verifie,agent,product_title,available,entered_at")
         .range(bFrom, bFrom + PAGE - 1);
       if (bErr) throw new Error("Lecture nc_barrage: " + bErr.message);
       if (!bPage || bPage.length === 0) break;
@@ -137,6 +137,7 @@ export async function POST(request) {
         verifie:           existing?.verifie      ?? false,
         agent:             existing?.agent        ?? actor,
         synced_at:         now,
+        entered_at:        existing?.entered_at   ?? now,
       };
     });
 

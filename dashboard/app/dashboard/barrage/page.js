@@ -141,6 +141,7 @@ function ProduitCard({ row, onSave, saving, correctionEvents }) {
   return (
     <div
       data-testid="barrage-card"
+      data-entered-at={row.entered_at || ""}
       className={`bg-white rounded-xl border transition-all
         ${verifie ? "border-green-200 opacity-60" : horsBarrage ? "border-yellow-200 opacity-70" : hasCible ? "border-blue-200" : "border-gray-200"}`}
     >
@@ -406,7 +407,7 @@ export default function BarragePage() {
   const [loadingHist,      setLoadingHist]      = useState(false);
   const [loading,          setLoading]          = useState(true);
   const [search,           setSearch]           = useState("");
-  const [filter,           setFilter]           = useState("tous"); // tous | coiffure | onglerie | historique
+  const [filter,           setFilter]           = useState("tous"); // tous | today | coiffure | onglerie | historique
   const [saving,           setSaving]           = useState(null);
   const [showModal,        setShowModal]        = useState(false);
   const [running,          setRunning]          = useState(false);
@@ -605,12 +606,20 @@ export default function BarragePage() {
   };
 
   // ── Filtrage ───────────────────────────────────────────────────
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const isEnteredToday = (r) => {
+    if (!r.entered_at) return false;
+    const t = new Date(r.entered_at).getTime();
+    return Number.isFinite(t) && (Date.now() - t) < ONE_DAY_MS;
+  };
+
   const inRange  = rows.filter(r => r.liveStock >= 1);
   const filtered = inRange.filter(r => {
     const balise = (r.balise || "").toLowerCase();
     const isOng = balise === "onglerie" || balise.includes("ongl");
     if (filter === "coiffure" && isOng) return false;
     if (filter === "onglerie" && !isOng) return false;
+    if (filter === "today"    && !isEnteredToday(r)) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       return (r.product_title || "").toLowerCase().includes(q);
@@ -621,6 +630,7 @@ export default function BarragePage() {
   const nbRupture  = rows.filter(r => r.liveStock < 1).length;
   const nbOnglerie = inRange.filter(r => { const b = (r.balise||"").toLowerCase(); return b === "onglerie" || b.includes("ongl"); }).length;
   const nbCoiffure = inRange.length - nbOnglerie;
+  const nbToday    = inRange.filter(isEnteredToday).length;
   const nbPending  = inRange.filter(r => r.stock_cible !== "" && r.stock_cible !== undefined && r.stock_cible !== null).length;
 
   // Compter les articles uniques dans l'historique
@@ -660,6 +670,8 @@ export default function BarragePage() {
             <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
               {filter === "historique" ? (
                 <span>Historique articles sortis du barrage</span>
+              ) : filter === "today" ? (
+                <span>{nbToday} article{nbToday !== 1 ? "s" : ""} entré{nbToday !== 1 ? "s" : ""} dans les dernières 24h</span>
               ) : (
                 <>
                   <span>{inRange.length} article{inRange.length !== 1 ? "s" : ""} à vérifier</span>
@@ -704,6 +716,7 @@ export default function BarragePage() {
           <div className="flex gap-1">
             {[
               { key: "tous",       label: "Tous",       count: inRange.length },
+              { key: "today",      label: "🆕 Aujourd'hui", count: nbToday },
               { key: "coiffure",   label: "Coiffure",   count: nbCoiffure },
               { key: "onglerie",   label: "Onglerie",   count: nbOnglerie },
               { key: "historique", label: "📋 Historique", count: filter === "historique" && nbHistorique > 0 ? nbHistorique : null },
@@ -746,7 +759,9 @@ export default function BarragePage() {
           <div className="flex flex-col items-center justify-center h-40 text-gray-400">
             <div className="text-4xl mb-2">✅</div>
             <div className="text-sm">
-              {rows.length === 0 ? "Aucun produit en barrage" : "Aucun résultat pour cette recherche"}
+              {filter === "today"
+                ? "Aucun nouvel article entré dans les dernières 24h"
+                : rows.length === 0 ? "Aucun produit en barrage" : "Aucun résultat pour cette recherche"}
             </div>
           </div>
         ) : (

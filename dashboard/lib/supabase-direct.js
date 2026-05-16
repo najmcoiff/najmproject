@@ -337,7 +337,7 @@ export async function sbGetBarrage() {
   const rows = await _sbAll(
     "nc_barrage?order=synced_at.desc"
     + "&select=variant_id,product_title,variant_image_url,"
-    + "balise,available,on_hand,committed,stock_cible,agent,note_agent,verifie,synced_at"
+    + "balise,available,on_hand,committed,stock_cible,agent,note_agent,verifie,synced_at,entered_at"
   );
   return { ok: true, rows, count: rows.length };
 }

@@ -775,4 +775,116 @@ test.describe("Barrage Supabase-only (T200)", () => {
     console.log("✅ Correction barrage visible dans page Stock sans délai");
   });
 
+  // ── T_BARRAGE_TODAY-1 : DB — colonne entered_at peuplée sur toutes les lignes ─
+  test("T_BARRAGE_TODAY-1 : nc_barrage.entered_at peuplé sur tous les articles", async () => {
+    const rows = await sbQuery("nc_barrage", "select=variant_id,entered_at&limit=2000");
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length, "nc_barrage non vide").toBeGreaterThan(0);
+    const missing = rows.filter(r => !r.entered_at).length;
+    console.log(`entered_at NULL : ${missing} / ${rows.length}`);
+    expect(missing, "entered_at doit être peuplé sur toutes les lignes (backfill)").toBe(0);
+  });
+
+  // ── T_BARRAGE_TODAY-2 : UI — filtre Aujourd'hui visible avec compteur ─
+  test("T_BARRAGE_TODAY-2 : bouton filtre Aujourd'hui + compteur header cohérent", async ({ authedPage }) => {
+    await authedPage.goto("/dashboard/barrage");
+    await authedPage.waitForSelector("h1", { timeout: 15000 });
+    await authedPage.waitForFunction(() => {
+      const spinner = document.querySelector("svg.animate-spin");
+      const cards   = document.querySelectorAll("[data-testid='barrage-card']");
+      return !spinner && cards.length > 0;
+    }, { timeout: 30000 }).catch(() => {});
+
+    const todayBtn = authedPage.locator("[data-testid='filter-today']");
+    await expect(todayBtn, "Bouton filtre Aujourd'hui visible").toBeVisible({ timeout: 5000 });
+
+    const btnTxt = (await todayBtn.textContent()) || "";
+    const m = btnTxt.match(/(\d+)/);
+    const nbTodayBtn = m ? parseInt(m[1], 10) : 0;
+    console.log(`Bouton Aujourd'hui : "${btnTxt.trim()}" → nbToday=${nbTodayBtn}`);
+
+    await todayBtn.click();
+    await authedPage.waitForTimeout(800);
+
+    // Header doit refléter "dernières 24h"
+    const headerSubtitle = (await authedPage.locator("h1 + p").textContent().catch(() => "")) || "";
+    console.log(`Header en mode Aujourd'hui : "${headerSubtitle.trim()}"`);
+    expect(headerSubtitle.toLowerCase(), "Header parle de 24h").toMatch(/24h|derni[èe]res/);
+
+    const cards = authedPage.locator("[data-testid='barrage-card']");
+    const nbCards = await cards.count();
+    console.log(`Cards visibles en mode Aujourd'hui : ${nbCards}`);
+    expect(nbCards, "Compteur bouton = nombre de cards affichées").toBe(nbTodayBtn);
+
+    // Vérif assertion clé : toutes les cards visibles ont entered_at < 24h
+    if (nbCards > 0) {
+      const dates = await cards.evaluateAll(els => els.map(e => e.getAttribute("data-entered-at")));
+      const now = Date.now();
+      const stale = dates.filter(d => !d || (now - new Date(d).getTime()) >= 24 * 60 * 60 * 1000);
+      console.log(`Cards avec entered_at hors 24h : ${stale.length}`);
+      expect(stale.length, "Toutes les cards affichées doivent avoir entered_at < 24h").toBe(0);
+    }
+  });
+
+  // ── T_BARRAGE_TODAY-3 : UI — article avec entered_at >24h n'apparaît PAS dans Aujourd'hui ─
+  test("T_BARRAGE_TODAY-3 : entered_at >24h exclu du filtre Aujourd'hui (UI)", async ({ authedPage }) => {
+    // Trouver une variante du barrage et la "vieillir" artificiellement
+    const rows = await sbQuery("nc_barrage", "select=variant_id,product_title,entered_at&limit=1");
+    if (!rows?.length) { console.log("⚠️  nc_barrage vide"); return; }
+
+    const v = rows[0];
+    const entered_at_orig = v.entered_at;
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    await sbPatch("nc_barrage", `variant_id=eq.${v.variant_id}`, { entered_at: twoDaysAgo });
+    console.log(`entered_at forcé à ${twoDaysAgo} pour variant_id=${v.variant_id}`);
+
+    try {
+      await authedPage.goto("/dashboard/barrage");
+      await authedPage.waitForFunction(() => {
+        const spinner = document.querySelector("svg.animate-spin");
+        const cards   = document.querySelectorAll("[data-testid='barrage-card']");
+        return !spinner && cards.length > 0;
+      }, { timeout: 30000 }).catch(() => {});
+
+      // L'article doit apparaître dans Tous
+      const tousBtn = authedPage.locator("[data-testid='filter-tous']");
+      await tousBtn.click();
+      await authedPage.waitForTimeout(500);
+      const allCards = authedPage.locator(`[data-testid='barrage-card'][data-entered-at="${twoDaysAgo}"]`);
+      const nbInAll = await allCards.count();
+      console.log(`Article vieilli visible dans Tous : ${nbInAll}`);
+      expect(nbInAll, "Article doit toujours être visible dans Tous").toBeGreaterThan(0);
+
+      // Mais pas dans Aujourd'hui
+      await authedPage.locator("[data-testid='filter-today']").click();
+      await authedPage.waitForTimeout(500);
+      const nbInToday = await allCards.count();
+      console.log(`Article vieilli visible dans Aujourd'hui : ${nbInToday}`);
+      expect(nbInToday, "Article avec entered_at >24h doit être exclu de Aujourd'hui").toBe(0);
+    } finally {
+      // Restaurer
+      await sbPatch("nc_barrage", `variant_id=eq.${v.variant_id}`, { entered_at: entered_at_orig });
+      console.log(`entered_at restauré à ${entered_at_orig}`);
+    }
+  });
+
+  // ── T_BARRAGE_TODAY-4 : entered_at préservé entre deux analyses successives ─
+  test("T_BARRAGE_TODAY-4 : analyse ne réécrit pas entered_at d'un article déjà présent", async ({ authedPage, token }) => {
+    const rows = await sbQuery("nc_barrage", "select=variant_id,entered_at&limit=1");
+    if (!rows?.length) { console.log("⚠️  nc_barrage vide"); return; }
+    const before = rows[0].entered_at;
+    console.log(`entered_at avant analyse : ${before}`);
+
+    const resp = await authedPage.request.post("/api/barrage/analyse", { data: { token } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json();
+    console.log(`Analyse : added=${body.added} updated=${body.updated} removed=${body.removed}`);
+
+    const after = await sbQuery("nc_barrage", `variant_id=eq.${rows[0].variant_id}&select=entered_at&limit=1`);
+    const afterVal = after?.[0]?.entered_at;
+    console.log(`entered_at après analyse : ${afterVal}`);
+    expect(afterVal, "entered_at doit être préservé pour articles existants").toBe(before);
+  });
+
 });
