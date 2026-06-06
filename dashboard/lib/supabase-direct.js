@@ -137,7 +137,7 @@ function _computeDoublons(rows) {
 export async function sbGetOrders() {
   // Filtre principal : POS exclus + commandes archivées exclues (archived=true)
   const rows = await _sbAll(
-    "nc_orders?order_source=neq.pos&archived=neq.true&order=order_date.desc.nullslast"
+    "nc_orders?order_source=neq.pos&archived=neq.true&order=order_date.desc.nullslast,order_id.asc"
     + "&select=order_id,order_date,customer_phone,customer_name,wilaya,commune,adresse,"
     + "decision_status,confirmation_status,contact_status,contact_attempts,cancellation_reason,"
     + "order_change_status,customer_type,order_total,shipping_fee,note,note_manager,"
@@ -313,7 +313,7 @@ export async function sbGetSuiviZR() {
   // Tri : date_injection DESC (plus récent en premier), nulls last
   const rows = await _sbAll(
     "nc_suivi_zr"
-    + "?order=date_injection.desc.nullslast,updated_at.desc"
+    + "?order=date_injection.desc.nullslast,updated_at.desc,tracking.asc"
     + "&select=tracking,parcel_id,order_id,customer_name,customer_phone,wilaya,adresse,"
     + "carrier,statut_livraison,attempts_count,delivery_mode,shopify_order_name,"
     + "next_action,ops_note,ops_status,final_status,"
@@ -335,7 +335,7 @@ export async function sbUpdateSuiviZR(tracking, fields) {
 
 export async function sbGetBarrage() {
   const rows = await _sbAll(
-    "nc_barrage?order=synced_at.desc"
+    "nc_barrage?order=synced_at.desc,variant_id.asc"
     + "&select=variant_id,product_title,variant_image_url,"
     + "balise,available,on_hand,committed,stock_cible,agent,note_agent,verifie,synced_at,entered_at"
   );
@@ -358,7 +358,10 @@ export async function sbGetVariants() {
   // Exclure les variantes fantômes (product_title NULL = imports Shopify corrompus)
   // Tri par synced_at desc = articles les plus récemment ajoutés à la plateforme en premier
   const rows = await _sbAll(
-    "nc_variants?order=synced_at.desc.nullslast"
+    // Tie-breaker variant_id.asc : sans lui, ~3792 lignes partagent la même
+    // synced_at (snapshot initial) → l'ordre Postgres entre elles est non-
+    // déterministe → la pagination Range omet des lignes à chaque page.
+    "nc_variants?order=synced_at.desc.nullslast,variant_id.asc"
     + "&product_title=not.is.null"
     + "&select=variant_id,display_name,product_title,variant_title,sku,barcode,"
     + "price,cost_price,inventory_quantity,image_url,status,vendor,collections_titles,"
@@ -371,7 +374,7 @@ export async function sbGetVariants() {
 
 export async function sbGetRapports() {
   const rows = await _sbAll(
-    "nc_rapports?order=created_at.desc"
+    "nc_rapports?order=created_at.desc,report_id.asc"
     + "&select=report_id,categorie,cas,type,severity,agent,status,verified,manager_note,"
     + "description,action_taken,action_needed,order_id,tracking,product_name,"
     + "valeur,fournisseur,piece_jointe,created_at,updated_at"
@@ -468,7 +471,7 @@ export async function sbGetExitBarrageHistory() {
 
 export async function sbGetPOLines() {
   const rows = await _sbAll(
-    "nc_po_lines?order=created_at.desc"
+    "nc_po_lines?order=created_at.desc,po_line_id.asc"
     + "&select=po_line_id,po_id,variant_id,display_name,product_title,qty_add,sell_price,purchase_price,barcode,note,agent,synced_at,collections_titles_pick,created_at"
   );
   return { ok: true, rows, count: rows.length };
@@ -480,7 +483,7 @@ export async function sbGetPOLines() {
 
 export async function sbGetGestionFond() {
   const rows = await _sbAll(
-    "nc_gestion_fond?order=timestamp.desc"
+    "nc_gestion_fond?order=timestamp.desc,id_fond.asc"
     + "&select=id_fond,timestamp,agent,categorie,type,montant,description,order_id,fournisseur,source"
   );
   return { ok: true, rows, count: rows.length };

@@ -1,8 +1,25 @@
 ﻿"use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { smartMatch } from "@/lib/smart-search";
+import { smartFilterAdaptive } from "@/lib/smart-search";
+
+// Normalise code-barre/SKU pour comparaison (cf. /pos) : retire tout sauf
+// alphanumérique. Indispensable car certains barcodes contiennent des
+// séparateurs saisis manuellement (`748483752&`, `111333890-5`).
+function normalizeCode(s) {
+  return String(s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+function stripLeadingZeros(s) {
+  return String(s || "").replace(/^0+/, "");
+}
+function codesMatch(stored, scanned) {
+  if (!stored || !scanned) return false;
+  if (stored === scanned) return true;
+  const sZ = stripLeadingZeros(stored);
+  const cZ = stripLeadingZeros(scanned);
+  return sZ.length >= 6 && cZ.length >= 6 && sZ === cZ;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────
 function fmtPrice(v) {
@@ -39,11 +56,36 @@ function BonTab({ variants, showToast, session, panier, setPanier, poId, setPoId
   const [injecting,setInjecting]= useState(false);
   const [showPdf,  setShowPdf]  = useState(false);
 
-  const results = search.trim()
-    ? variants.filter(r =>
-        smartMatch(search, [r.display_name, r.product_title, r.vendor, r.sku, r.barcode, r.collections_titles])
-      ).slice(0, 20)
-    : [];
+  // Recherche alignée sur POS : scoring + tri pertinence + threshold adaptatif
+  // + court-circuit barcode/SKU normalisé (UPC-A ↔ EAN-13, séparateurs).
+  const normalizedSearch = useMemo(() => normalizeCode(search), [search]);
+  const exactCodeHits = useMemo(() => {
+    if (normalizedSearch.length < 4) return null;
+    const list = variants.filter(v =>
+      codesMatch(normalizeCode(v.barcode), normalizedSearch) ||
+      codesMatch(normalizeCode(v.sku), normalizedSearch)
+    );
+    return list.length ? list : null;
+  }, [variants, normalizedSearch]);
+  const results = useMemo(() => {
+    if (exactCodeHits) {
+      return exactCodeHits.slice(0, 20).map(v => ({ ...v, _displayTitle: v.display_name || v.product_title }));
+    }
+    if (!search.trim()) return [];
+    const scored = smartFilterAdaptive(variants, search, v => [
+      v.display_name, v.product_title, v.vendor,
+      v.barcode, v.sku, v.collections_titles,
+      normalizeCode(v.barcode), normalizeCode(v.sku),
+    ]);
+    return scored.slice(0, 20).map(({ item, matchedFieldIndices }) => {
+      const matchedDisplay = matchedFieldIndices.includes(0);
+      const matchedTitle   = matchedFieldIndices.includes(1);
+      const _displayTitle  = (!matchedDisplay && matchedTitle && item.product_title)
+        ? item.product_title
+        : (item.display_name || item.product_title);
+      return { ...item, _displayTitle };
+    });
+  }, [variants, search, exactCodeHits]);
 
   const addToPanier = (r) => {
     const vid = String(r.variant_id);
@@ -134,7 +176,7 @@ function BonTab({ variants, showToast, session, panier, setPanier, poId, setPoId
                   : <span className="w-full h-full flex items-center justify-center text-gray-300">📦</span>}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-gray-800 truncate">{String(r.display_name || "—")}</div>
+                <div className="text-xs font-semibold text-gray-800 truncate">{String(r._displayTitle || r.display_name || "—")}</div>
                 <div className="text-xs text-gray-400 flex gap-2">
                   <span className={stockColor(r.inventory_quantity)}>Stock: {Number(r.inventory_quantity)}</span>
                   <span>{fmtPrice(r.price)}</span>

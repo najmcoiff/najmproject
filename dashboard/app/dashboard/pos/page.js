@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getSession } from "@/lib/auth";
 import { api, invalidateCache } from "@/lib/api";
-import { smartMatch } from "@/lib/smart-search";
+import { smartFilterAdaptive } from "@/lib/smart-search";
 
 // Normalise un code (barcode ou SKU) pour comparaison : retire tout sauf
 // alphanumérique (espaces, tirets, &, caractères invisibles…) et lowercase.
@@ -51,11 +51,12 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
   const lastTimeRef  = useRef(0);
   const pulseRef     = useRef(null);
 
-  const [camError,  setCamError]  = useState(null);
-  const [ready,     setReady]     = useState(false);
-  const [preview,   setPreview]   = useState(null);  // variant trouvée
-  const [notFound,  setNotFound]  = useState(null);  // barcode string inconnu
-  const [scanning,  setScanning]  = useState(true);
+  const [camError,    setCamError]    = useState(null);
+  const [ready,       setReady]       = useState(false);
+  const [preview,     setPreview]     = useState(null);   // variant unique sélectionnée
+  const [candidates,  setCandidates]  = useState([]);     // plusieurs variants partagent le code
+  const [notFound,    setNotFound]    = useState(null);   // barcode string inconnu
+  const [scanning,    setScanning]    = useState(true);
 
   // ── Arrêter complètement la caméra ─────────────────────────
   const stopCamera = useCallback(() => {
@@ -66,21 +67,21 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
 
   // ── Recherche dans le catalogue ────────────────────────────
   // Match normalisé (sans espace, tiret, &, casse) ET tolérant aux
-  // leading zeros (UPC-A 12 chiffres ↔ EAN-13 13 chiffres). Sans cette
-  // tolérance, `872009288376` stocké en DB n'est pas trouvé quand la
-  // caméra le décode en `0872009288376`.
-  const findVariant = useCallback((code) => {
-    const raw  = String(code).trim();
-    const norm = normalizeCode(raw);
-    if (!norm) return null;
-    // Priorité : variant en stock > rupture, pour éviter de matcher un
-    // doublon stock 0 quand un stock positif existe sur le même code.
+  // leading zeros (UPC-A 12 chiffres ↔ EAN-13 13 chiffres).
+  // Retourne TOUS les hits (tri stock>0 d'abord) pour qu'un scan ambigu
+  // — plusieurs variants partageant le même barcode — propose un choix.
+  const findVariants = useCallback((code) => {
+    const norm = normalizeCode(String(code).trim());
+    if (!norm) return [];
     const hits = variants.filter(v =>
       codesMatch(normalizeCode(v.barcode), norm) ||
       codesMatch(normalizeCode(v.sku), norm)
     );
-    if (!hits.length) return null;
-    return hits.find(v => Number(v.inventory_quantity) > 0) || hits[0];
+    return hits.slice().sort((a, b) => {
+      const sa = Number(a.inventory_quantity) > 0 ? 1 : 0;
+      const sb = Number(b.inventory_quantity) > 0 ? 1 : 0;
+      return sb - sa;
+    });
   }, [variants]);
 
   // ── Handler barcode détecté ─────────────────────────────────
@@ -100,15 +101,22 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
     // Vibration feedback
     if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
 
-    const hit = findVariant(code);
-    if (hit) {
-      setPreview(hit);
+    const hits = findVariants(code);
+    if (hits.length === 0) {
+      setPreview(null);
+      setCandidates([]);
+      setNotFound(code);
+    } else if (hits.length === 1) {
+      setPreview(hits[0]);
+      setCandidates([]);
       setNotFound(null);
     } else {
+      // Plusieurs variants partagent ce code → demander à l'agent
       setPreview(null);
-      setNotFound(code);
+      setCandidates(hits);
+      setNotFound(null);
     }
-  }, [findVariant]);
+  }, [findVariants]);
 
   // ── Loop BarcodeDetector natif ──────────────────────────────
   const nativeLoop = useCallback((detector) => {
@@ -154,6 +162,7 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
   // ── Re-scanner ──────────────────────────────────────────────
   const rescan = useCallback(() => {
     setPreview(null);
+    setCandidates([]);
     setNotFound(null);
     setScanning(true);
     lastCodeRef.current = null;
@@ -215,12 +224,17 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
           <div>
             <p className="text-white font-bold text-sm leading-tight">Scanner code-barres</p>
             <p className="text-xs leading-tight" style={{
-              color: scanning ? "#86efac" : preview ? "#4ade80" : notFound ? "#fca5a5" : "#9ca3af"
+              color: scanning ? "#86efac"
+                : preview ? "#4ade80"
+                : candidates.length ? "#fbbf24"
+                : notFound ? "#fca5a5" : "#9ca3af"
             }}>
               {scanning
                 ? "Pointer vers le code-barres…"
                 : preview
                 ? "✓ Article identifié"
+                : candidates.length
+                ? `⚠ ${candidates.length} articles partagent ce code`
                 : notFound
                 ? "⚠ Code non reconnu dans le catalogue"
                 : "Initialisation…"}
@@ -395,8 +409,66 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
         </div>
       )}
 
+      {/* ── Choix multi : plusieurs variants partagent ce barcode ── */}
+      {candidates.length > 0 && !preview && !scanning && (
+        <div
+          data-testid="scanner-candidates"
+          className="scanner-preview bg-white flex-shrink-0 rounded-t-3xl shadow-2xl"
+          style={{ maxHeight: "70vh", display: "flex", flexDirection: "column" }}
+        >
+          <div className="bg-amber-500 px-5 py-3 rounded-t-3xl flex items-center gap-3 flex-shrink-0">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <p className="text-white font-bold text-sm">Plusieurs articles partagent ce code</p>
+              <p className="text-amber-100 text-xs">Sélectionnez le bon</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-2">
+            {candidates.map(c => {
+              const stock = Number(c.inventory_quantity);
+              return (
+                <button
+                  key={String(c.variant_id)}
+                  data-testid="scanner-candidate-item"
+                  onClick={() => { setPreview(c); setCandidates([]); }}
+                  className="w-full text-left flex items-center gap-3 px-3 py-3 border-b border-gray-100 hover:bg-gray-50 touch-manipulation active:bg-gray-100"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden">
+                    {c.image_url
+                      ? <img src={c.image_url} alt="" className="w-full h-full object-cover" onError={e => e.target.style.display="none"} />
+                      : <span className="w-full h-full flex items-center justify-center text-gray-300">📦</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {c.display_name || c.product_title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {Number(c.price || 0).toLocaleString("fr-DZ")} DA
+                    </p>
+                  </div>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0
+                    ${stock <= 0 ? "bg-red-100 text-red-700"
+                      : stock <= 3 ? "bg-orange-100 text-orange-700"
+                      : "bg-green-100 text-green-700"}`}>
+                    {stock <= 0 ? "Rupture" : `Stock ${stock}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+            <button
+              onClick={rescan}
+              className="w-full py-3 rounded-2xl border-2 border-gray-200 text-gray-700 font-bold text-sm touch-manipulation"
+            >
+              ↺ Re-scanner
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Preview : produit NON TROUVÉ ─────────────────────── */}
-      {notFound && !preview && !scanning && (
+      {notFound && !preview && candidates.length === 0 && !scanning && (
         <div className="scanner-preview bg-white flex-shrink-0 rounded-t-3xl shadow-2xl">
           <div className="bg-red-500 px-5 py-3 rounded-t-3xl flex items-center gap-3">
             <span className="text-2xl">⚠️</span>
@@ -475,7 +547,7 @@ function ProductTile({ variant, onAdd, inCart }) {
       {/* Infos */}
       <div className="p-2 flex-1 flex flex-col gap-0.5">
         <p className="text-[11px] font-semibold text-gray-800 line-clamp-2 leading-tight">
-          {String(variant.display_name || variant.product_title || "—")}
+          {String(variant._displayTitle || variant.display_name || variant.product_title || "—")}
         </p>
         <p className="text-xs font-bold text-gray-900 mt-auto">{fmtPrice(variant.price)}</p>
         <p className={`text-[10px] ${stockColor(stock)}`}>Stock: {stock}</p>
@@ -862,20 +934,43 @@ export default function PosPage() {
     return list.length ? list : null;
   }, [variants, normalizedSearch]);
 
-  // ── Résultats de recherche intelligente multi-tokens + multi-champs + fuzzy ──
-  // Si la saisie matche EXACTEMENT un barcode/SKU normalisé, on retourne
-  // directement ce hit (court-circuite le fuzzy pour les scans clavier).
-  const results = exactCodeHits
-    ? exactCodeHits.slice(0, 50)
-    : (search.trim().length >= 1
-      ? variants.filter(v =>
-          smartMatch(search, [
-            v.display_name, v.product_title, v.vendor,
-            v.barcode, v.sku, v.collections_titles,
-            normalizeCode(v.barcode), normalizeCode(v.sku),
-          ])
-        ).slice(0, 50)
-      : []);
+  // ── Résultats de recherche intelligente ─────────────────────────
+  // Stratégie :
+  //   1. Si la saisie matche EXACTEMENT un barcode/SKU normalisé → court-
+  //      circuit (scan clavier / lecteur USB).
+  //   2. Sinon smartFilterAdaptive : multi-tokens, fuzzy, scoring avec
+  //      display_name boosté (× 3), tri par pertinence, threshold
+  //      durcissable à 0.7 si bruit > 100 résultats.
+  // Enrichissement _displayTitle : si le match s'est fait sur product_title
+  // alors que display_name ne contient pas le token, on affiche
+  // product_title dans la tuile pour éviter le ressenti "ça n'a pas de
+  // rapport" (cas "Rasoir classique " vs product_title "Rasoir classique vert").
+  const results = useMemo(() => {
+    if (exactCodeHits) {
+      return exactCodeHits.slice(0, 50).map(v => ({ ...v, _displayTitle: v.display_name || v.product_title }));
+    }
+    if (!search.trim()) return [];
+    const scored = smartFilterAdaptive(variants, search, v => [
+      v.display_name,         // 0 — boosté ×3
+      v.product_title,        // 1 — boosté ×2
+      v.vendor,               // 2
+      v.barcode,              // 3
+      v.sku,                  // 4
+      v.collections_titles,   // 5
+      normalizeCode(v.barcode),
+      normalizeCode(v.sku),
+    ]);
+    return scored.slice(0, 50).map(({ item, matchedFieldIndices }) => {
+      // Si display_name (idx 0) ne matche pas mais product_title (idx 1) oui
+      // → afficher product_title pour rendre la pertinence visible
+      const matchedDisplay = matchedFieldIndices.includes(0);
+      const matchedTitle   = matchedFieldIndices.includes(1);
+      const _displayTitle  = (!matchedDisplay && matchedTitle && item.product_title)
+        ? item.product_title
+        : (item.display_name || item.product_title);
+      return { ...item, _displayTitle };
+    });
+  }, [variants, search, exactCodeHits]);
 
   // ── Actions panier ─────────────────────────────────────────────
   const addToCart = useCallback((variant) => {
