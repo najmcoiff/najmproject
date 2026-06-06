@@ -48,26 +48,23 @@ async function installScannerMocks(page, scannedCode) {
       }
     };
 
-    // 2) Forcer HTMLVideoElement.readyState >= 2 pour que le scan loop
-    //    s'exécute (sinon il boucle indéfiniment en attendant la vidéo)
-    Object.defineProperty(HTMLVideoElement.prototype, "readyState", {
-      configurable: true,
-      get() { return 4; }, // HAVE_ENOUGH_DATA
-    });
-
-    // 3) Auto-dispatch "playing" event sur play() pour que la modale
-    //    appelle setReady(true) + startScan()
-    HTMLMediaElement.prototype.play = function () {
-      setTimeout(() => this.dispatchEvent(new Event("playing")), 30);
-      return Promise.resolve();
-    };
-
-    // 4) Mock getUserMedia → fake MediaStream sans vraie caméra
+    // 2) Mock getUserMedia → vrai MediaStream via canvas.captureStream()
+    //    (Chromium supporte captureStream natif). Un objet "fake" provoque
+    //    un TypeError sur video.srcObject = stream.
     if (!navigator.mediaDevices) navigator.mediaDevices = {};
-    navigator.mediaDevices.getUserMedia = async () => ({
-      getTracks: () => [{ stop: () => {}, kind: "video", enabled: true, readyState: "live" }],
-      active: true,
-    });
+    navigator.mediaDevices.getUserMedia = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320; canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, 0, 320, 240);
+      // Animer légèrement pour qu'il y ait du flux
+      setInterval(() => {
+        ctx.fillStyle = "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
+        ctx.fillRect(0, 0, 320, 240);
+      }, 100);
+      return canvas.captureStream(15);
+    };
   }, scannedCode);
 }
 
@@ -117,9 +114,10 @@ test.describe("T117c — Scan caméra UPC-A 12 chiffres décodé en EAN-13 13 ch
     await expect(modal).toBeVisible({ timeout: 8000 });
     console.log(`[T117C] Scanner ouvert, mock retournera "${EAN13_SCANNED}"`);
 
-    // La modale doit afficher "Article identifié" — preuve que findVariant
-    // a matché 12 chiffres DB vs 13 chiffres scan grâce au strip leading 0
-    await expect(authedPage.locator("text=Article identifié")).toBeVisible({ timeout: 15000 });
+    // La modale doit afficher "Article identifié !" (titre avec point d'excl.)
+    // — preuve que findVariant a matché 12 chiffres DB vs 13 chiffres scan
+    // grâce au strip leading 0
+    await expect(authedPage.locator("text=Article identifié !")).toBeVisible({ timeout: 15000 });
     console.log(`[T117C] ✓ Article identifié dans la modale scanner`);
 
     // Le nom du produit test doit apparaître dans la modale
