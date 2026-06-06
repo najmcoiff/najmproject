@@ -100,12 +100,14 @@ test.describe("T117b — Scan code-barres articles récemment ajoutés", () => {
     expect(firstText || "").toContain(`T117B Article Test ${STAMP}`);
     console.log(`[T117B] ✓ Article trouvé via code pur (séparateur "&" en DB)`);
 
-    // Clic → doit ajouter au panier (badge count visible)
+    // Clic → doit ajouter au panier. Sur mobile, le badge desktop
+    // `pos-cart-count` est caché (hidden lg:flex). C'est le bouton flottant
+    // `pos-float-cart-btn` qui apparaît avec le compteur.
     await tiles.first().click();
-    const cartCount = authedPage.locator('[data-testid="pos-cart-count"]').first();
-    await expect(cartCount).toBeVisible({ timeout: 5000 });
-    await expect(cartCount).toContainText("1");
-    console.log(`[T117B] ✓ Ajout au panier OK`);
+    const floatCart = authedPage.locator('[data-testid="pos-float-cart-btn"]');
+    await expect(floatCart).toBeVisible({ timeout: 5000 });
+    await expect(floatCart).toContainText("1");
+    console.log(`[T117B] ✓ Ajout au panier OK (bouton flottant mobile)`);
   });
 
   test("Mobile 375 — findVariant (scanner caméra) matche le code normalisé", async ({ authedPage }) => {
