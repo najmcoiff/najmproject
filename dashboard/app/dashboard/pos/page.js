@@ -892,14 +892,52 @@ function SuccessModal({ orderName, total, subtotal, discount, onClose }) {
 
 // ════════════════════════════════════════════════════════════════
 //  PAGE PRINCIPALE POS
+// ── Persistance panier POS (localStorage, TTL 24h) ───────────────
+// Un refresh ou un changement de page ne doit jamais vider le panier en
+// cours. L'agent peut consulter une autre feuille puis revenir au POS.
+const POS_CART_KEY = "nc_pos_cart_v1";
+const POS_CART_TTL_MS = 24 * 60 * 60 * 1000;
+function loadPosCart() {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(POS_CART_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+    if (Date.now() - Number(data.ts || 0) > POS_CART_TTL_MS) {
+      localStorage.removeItem(POS_CART_KEY);
+      return null;
+    }
+    return {
+      cart:     Array.isArray(data.cart) ? data.cart : [],
+      discount: Number(data.discount || 0),
+    };
+  } catch { return null; }
+}
+function savePosCart(cart, discount) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    if ((!cart || cart.length === 0) && !discount) {
+      localStorage.removeItem(POS_CART_KEY);
+      return;
+    }
+    localStorage.setItem(POS_CART_KEY, JSON.stringify({ cart, discount, ts: Date.now() }));
+  } catch {}
+}
+function clearPosCart() {
+  try { if (typeof localStorage !== "undefined") localStorage.removeItem(POS_CART_KEY); } catch {}
+}
+
 // ════════════════════════════════════════════════════════════════
 export default function PosPage() {
   const [session,      setSession]      = useState(null);
   const [variants,     setVariants]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState("");
-  const [cart,         setCart]         = useState([]);
-  const [discount,     setDiscount]     = useState(0);
+  // Restauration synchrone depuis localStorage : évite le "flash" panier vide
+  // au mount qui écraserait immédiatement la persistance.
+  const [cart,         setCart]         = useState(() => loadPosCart()?.cart || []);
+  const [discount,     setDiscount]     = useState(() => loadPosCart()?.discount || 0);
   const [showSheet,    setShowSheet]    = useState(false);
   const [showConfirm,  setShowConfirm]  = useState(false);
   const [showScanner,  setShowScanner]  = useState(false);
@@ -924,6 +962,13 @@ export default function PosPage() {
       if (res.ok) setVariants(res.rows || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  // Persiste le panier à chaque change (cart, discount). Restauration au
+  // mount = useState lazy initializer ci-dessus. Au succès vente / clearCart,
+  // savePosCart écrit un objet vide → removeItem.
+  useEffect(() => {
+    savePosCart(cart, discount);
+  }, [cart, discount]);
 
   // Index code-barres/SKU/variant_id normalisé pour le match exact via champ
   // recherche (lecteur USB qui tape `1113338905` doit matcher barcode DB

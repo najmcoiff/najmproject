@@ -497,6 +497,38 @@ function HistoriqueTab({ showToast, variants }) {
   );
 }
 
+// ── Persistance panier Stock (localStorage, TTL 24h) ─────────────
+// Un refresh ou navigation ne doit pas vider le bon en cours.
+const STOCK_BON_KEY = "nc_stock_bon_v1";
+const STOCK_BON_TTL_MS = 24 * 60 * 60 * 1000;
+function loadStockBon() {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(STOCK_BON_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+    if (Date.now() - Number(data.ts || 0) > STOCK_BON_TTL_MS) {
+      localStorage.removeItem(STOCK_BON_KEY);
+      return null;
+    }
+    return {
+      panier: Array.isArray(data.panier) ? data.panier : [],
+      poId:   String(data.poId || ""),
+    };
+  } catch { return null; }
+}
+function saveStockBon(panier, poId) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    if ((!panier || panier.length === 0)) {
+      localStorage.removeItem(STOCK_BON_KEY);
+      return;
+    }
+    localStorage.setItem(STOCK_BON_KEY, JSON.stringify({ panier, poId, ts: Date.now() }));
+  } catch {}
+}
+
 // ════════════════════════════════════════════════════════════════
 //  PAGE PRINCIPALE STOCK
 // ════════════════════════════════════════════════════════════════
@@ -506,9 +538,10 @@ export default function StockPage() {
   const [tab,      setTab]      = useState("bon");
   const [toast,    setToast]    = useState(null);
 
-  // Panier partagé — persiste lors des changements d'onglet
-  const [panier,   setPanier]   = useState([]);
-  const [poId,     setPoId]     = useState(() => genPoId());
+  // Panier partagé — persiste lors des changements d'onglet ET du refresh
+  // (restauration synchrone via lazy initializer pour éviter le flash vide).
+  const [panier,   setPanier]   = useState(() => loadStockBon()?.panier || []);
+  const [poId,     setPoId]     = useState(() => loadStockBon()?.poId || genPoId());
 
   const showToast = useCallback((msg, type = "success") => {
     setToast({ msg, type });
@@ -522,6 +555,11 @@ export default function StockPage() {
       if (res.ok) setVariants(res.rows || []);
     }).catch(() => {});
   }, []);
+
+  // Persiste le bon à chaque change (panier, poId). Vidage → removeItem.
+  useEffect(() => {
+    saveStockBon(panier, poId);
+  }, [panier, poId]);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
