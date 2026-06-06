@@ -13,6 +13,29 @@ function normalizeCode(s) {
   return String(s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
 }
 
+// Strip les zéros initiaux — la même étiquette UPC-A 12 chiffres
+// `872009288376` est typiquement re-décodée par le BarcodeDetector en
+// EAN-13 `0872009288376` (13 chiffres, leading 0 ajouté). Sans ce strip,
+// notre match échoue alors que c'est physiquement le même code-barres.
+// Aussi vrai pour le scan d'un EAN-8 lu comme code court.
+function stripLeadingZeros(s) {
+  return String(s || "").replace(/^0+/, "");
+}
+
+// Deux codes matchent si :
+//  - ils sont identiques après normalisation, OU
+//  - leur version sans zéros initiaux est identique (UPC-A ↔ EAN-13).
+// La comparaison "sans leading zeros" exige >= 6 caractères pour éviter
+// les faux positifs ("01" matcherait sinon "1", "00001"…).
+function codesMatch(stored, scanned) {
+  if (!stored || !scanned) return false;
+  if (stored === scanned) return true;
+  const sZ = stripLeadingZeros(stored);
+  const cZ = stripLeadingZeros(scanned);
+  if (sZ.length >= 6 && cZ.length >= 6 && sZ === cZ) return true;
+  return false;
+}
+
 // ════════════════════════════════════════════════════════════════
 //  BARCODE SCANNER MODAL — lecteur caméra professionnel
 //  Primaire  : BarcodeDetector API (Chrome/Edge/Android natif)
@@ -42,17 +65,22 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
   }, []);
 
   // ── Recherche dans le catalogue ────────────────────────────
-  // Match normalisé (sans espace, tiret, &, casse) car la caméra/lecteur USB
-  // ne reproduit jamais les séparateurs présents dans nc_variants.
+  // Match normalisé (sans espace, tiret, &, casse) ET tolérant aux
+  // leading zeros (UPC-A 12 chiffres ↔ EAN-13 13 chiffres). Sans cette
+  // tolérance, `872009288376` stocké en DB n'est pas trouvé quand la
+  // caméra le décode en `0872009288376`.
   const findVariant = useCallback((code) => {
     const raw  = String(code).trim();
     const norm = normalizeCode(raw);
     if (!norm) return null;
-    return variants.find(v => {
-      const bN = normalizeCode(v.barcode);
-      const sN = normalizeCode(v.sku);
-      return (bN && bN === norm) || (sN && sN === norm);
-    }) || null;
+    // Priorité : variant en stock > rupture, pour éviter de matcher un
+    // doublon stock 0 quand un stock positif existe sur le même code.
+    const hits = variants.filter(v =>
+      codesMatch(normalizeCode(v.barcode), norm) ||
+      codesMatch(normalizeCode(v.sku), norm)
+    );
+    if (!hits.length) return null;
+    return hits.find(v => Number(v.inventory_quantity) > 0) || hits[0];
   }, [variants]);
 
   // ── Handler barcode détecté ─────────────────────────────────
@@ -827,11 +855,10 @@ export default function PosPage() {
   const normalizedSearch = useMemo(() => normalizeCode(search), [search]);
   const exactCodeHits = useMemo(() => {
     if (normalizedSearch.length < 4) return null;
-    const list = variants.filter(v => {
-      const bN = normalizeCode(v.barcode);
-      const sN = normalizeCode(v.sku);
-      return (bN && bN === normalizedSearch) || (sN && sN === normalizedSearch);
-    });
+    const list = variants.filter(v =>
+      codesMatch(normalizeCode(v.barcode), normalizedSearch) ||
+      codesMatch(normalizeCode(v.sku), normalizedSearch)
+    );
     return list.length ? list : null;
   }, [variants, normalizedSearch]);
 
