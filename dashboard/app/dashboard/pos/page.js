@@ -70,12 +70,15 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
   // leading zeros (UPC-A 12 chiffres ↔ EAN-13 13 chiffres).
   // Retourne TOUS les hits (tri stock>0 d'abord) pour qu'un scan ambigu
   // — plusieurs variants partageant le même barcode — propose un choix.
+  // Champs candidats : barcode, sku, ET variant_id (rétro-compat des
+  // étiquettes historiques imprimées avec variant_id au lieu du barcode).
   const findVariants = useCallback((code) => {
     const norm = normalizeCode(String(code).trim());
     if (!norm) return [];
     const hits = variants.filter(v =>
       codesMatch(normalizeCode(v.barcode), norm) ||
-      codesMatch(normalizeCode(v.sku), norm)
+      codesMatch(normalizeCode(v.sku), norm) ||
+      codesMatch(normalizeCode(v.variant_id), norm)
     );
     return hits.slice().sort((a, b) => {
       const sa = Number(a.inventory_quantity) > 0 ? 1 : 0;
@@ -922,14 +925,16 @@ export default function PosPage() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Index code-barres/SKU normalisé pour le match exact via champ recherche
-  // (lecteur USB qui tape `1113338905` doit matcher barcode DB `111333890-5`).
+  // Index code-barres/SKU/variant_id normalisé pour le match exact via champ
+  // recherche (lecteur USB qui tape `1113338905` doit matcher barcode DB
+  // `111333890-5`, ou un variant_id Shopify imprimé sur une étiquette).
   const normalizedSearch = useMemo(() => normalizeCode(search), [search]);
   const exactCodeHits = useMemo(() => {
     if (normalizedSearch.length < 4) return null;
     const list = variants.filter(v =>
       codesMatch(normalizeCode(v.barcode), normalizedSearch) ||
-      codesMatch(normalizeCode(v.sku), normalizedSearch)
+      codesMatch(normalizeCode(v.sku), normalizedSearch) ||
+      codesMatch(normalizeCode(v.variant_id), normalizedSearch)
     );
     return list.length ? list : null;
   }, [variants, normalizedSearch]);
@@ -959,6 +964,7 @@ export default function PosPage() {
       v.collections_titles,   // 5
       normalizeCode(v.barcode),
       normalizeCode(v.sku),
+      normalizeCode(v.variant_id), // rétro-compat étiquettes historiques
     ]);
     return scored.slice(0, 50).map(({ item, matchedFieldIndices }) => {
       // Si display_name (idx 0) ne matche pas mais product_title (idx 1) oui

@@ -63,7 +63,8 @@ function BonTab({ variants, showToast, session, panier, setPanier, poId, setPoId
     if (normalizedSearch.length < 4) return null;
     const list = variants.filter(v =>
       codesMatch(normalizeCode(v.barcode), normalizedSearch) ||
-      codesMatch(normalizeCode(v.sku), normalizedSearch)
+      codesMatch(normalizeCode(v.sku), normalizedSearch) ||
+      codesMatch(normalizeCode(v.variant_id), normalizedSearch)
     );
     return list.length ? list : null;
   }, [variants, normalizedSearch]);
@@ -76,6 +77,7 @@ function BonTab({ variants, showToast, session, panier, setPanier, poId, setPoId
       v.display_name, v.product_title, v.vendor,
       v.barcode, v.sku, v.collections_titles,
       normalizeCode(v.barcode), normalizeCode(v.sku),
+      normalizeCode(v.variant_id), // rétro-compat étiquettes historiques
     ]);
     return scored.slice(0, 20).map(({ item, matchedFieldIndices }) => {
       const matchedDisplay = matchedFieldIndices.includes(0);

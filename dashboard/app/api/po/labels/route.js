@@ -39,7 +39,12 @@ export async function POST(request) {
 
     const rows = (data || []).map(r => ({
       product_title: r.product_title || "",
-      barcode:       r.variant_id    || "",
+      // Priorité au VRAI barcode (nc_po_lines.barcode = barcode Shopify).
+      // Fallback variant_id uniquement si barcode absent — historiquement
+      // cette ligne forçait variant_id, causant des étiquettes physiques
+      // encodant le variant_id (ex: 49000232223016) que le scanner POS ne
+      // retrouvait jamais dans nc_variants.barcode (ex: 6130574001524).
+      barcode:       r.barcode || r.variant_id || "",
       sell_price:    r.sell_price    || 0,
       qty_add:       r.qty_add       || 0,
       po_id:         r.po_id         || "",
