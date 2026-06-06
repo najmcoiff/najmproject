@@ -1,8 +1,17 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getSession } from "@/lib/auth";
 import { api, invalidateCache } from "@/lib/api";
 import { smartMatch } from "@/lib/smart-search";
+
+// Normalise un code (barcode ou SKU) pour comparaison : retire tout sauf
+// alphanumérique (espaces, tirets, &, caractères invisibles…) et lowercase.
+// Indispensable car les codes saisis manuellement contiennent souvent
+// des séparateurs (`748483752&`, `111333890-5`, `143216 76518`) que la
+// caméra ou un lecteur USB ne reproduisent jamais.
+function normalizeCode(s) {
+  return String(s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
 
 // ════════════════════════════════════════════════════════════════
 //  BARCODE SCANNER MODAL — lecteur caméra professionnel
@@ -33,13 +42,17 @@ function BarcodeScannerModal({ variants, onAdd, onClose }) {
   }, []);
 
   // ── Recherche dans le catalogue ────────────────────────────
+  // Match normalisé (sans espace, tiret, &, casse) car la caméra/lecteur USB
+  // ne reproduit jamais les séparateurs présents dans nc_variants.
   const findVariant = useCallback((code) => {
-    const c = String(code).trim();
-    return variants.find(v =>
-      String(v.barcode || "").trim()            === c ||
-      String(v.sku     || "").trim()            === c ||
-      String(v.sku     || "").toLowerCase()     === c.toLowerCase()
-    ) || null;
+    const raw  = String(code).trim();
+    const norm = normalizeCode(raw);
+    if (!norm) return null;
+    return variants.find(v => {
+      const bN = normalizeCode(v.barcode);
+      const sN = normalizeCode(v.sku);
+      return (bN && bN === norm) || (sN && sN === norm);
+    }) || null;
   }, [variants]);
 
   // ── Handler barcode détecté ─────────────────────────────────
@@ -800,20 +813,42 @@ export default function PosPage() {
   useEffect(() => {
     const s = getSession();
     setSession(s?.user || null);
+    // Toujours forcer un refresh à l'ouverture du POS : avec TTL 10min, un
+    // article ajouté il y a < 10 min ne serait pas dans le cache et donc
+    // invisible au scan/recherche. Ouvrir POS = vouloir vendre maintenant.
+    invalidateCache("variants");
     api.getVariantsCache().then(res => {
       if (res.ok) setVariants(res.rows || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  // Index code-barres/SKU normalisé pour le match exact via champ recherche
+  // (lecteur USB qui tape `1113338905` doit matcher barcode DB `111333890-5`).
+  const normalizedSearch = useMemo(() => normalizeCode(search), [search]);
+  const exactCodeHits = useMemo(() => {
+    if (normalizedSearch.length < 4) return null;
+    const list = variants.filter(v => {
+      const bN = normalizeCode(v.barcode);
+      const sN = normalizeCode(v.sku);
+      return (bN && bN === normalizedSearch) || (sN && sN === normalizedSearch);
+    });
+    return list.length ? list : null;
+  }, [variants, normalizedSearch]);
+
   // ── Résultats de recherche intelligente multi-tokens + multi-champs + fuzzy ──
-  const results = search.trim().length >= 1
-    ? variants.filter(v =>
-        smartMatch(search, [
-          v.display_name, v.product_title, v.vendor,
-          v.barcode, v.sku, v.collections_titles,
-        ])
-      ).slice(0, 50)
-    : [];
+  // Si la saisie matche EXACTEMENT un barcode/SKU normalisé, on retourne
+  // directement ce hit (court-circuite le fuzzy pour les scans clavier).
+  const results = exactCodeHits
+    ? exactCodeHits.slice(0, 50)
+    : (search.trim().length >= 1
+      ? variants.filter(v =>
+          smartMatch(search, [
+            v.display_name, v.product_title, v.vendor,
+            v.barcode, v.sku, v.collections_titles,
+            normalizeCode(v.barcode), normalizeCode(v.sku),
+          ])
+        ).slice(0, 50)
+      : []);
 
   // ── Actions panier ─────────────────────────────────────────────
   const addToCart = useCallback((variant) => {
