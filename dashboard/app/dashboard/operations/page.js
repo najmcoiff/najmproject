@@ -25,6 +25,7 @@ const WILAYA_MAP = {
 function getWilayaCode(wilaya) {
   if (!wilaya) return "??";
   const key = wilaya.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // retire les accents: "Ain Defla", "Saida"...
     .replace(/[-']/g, " ")
     .replace(/\s+/g, " ");
   if (WILAYA_MAP[key]) return WILAYA_MAP[key];
