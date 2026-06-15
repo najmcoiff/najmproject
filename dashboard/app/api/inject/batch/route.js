@@ -38,16 +38,30 @@ export async function POST(request) {
 
     // ── 1. Lire les commandes confirmées ou modifiées, sans tracking ni zr_locked ──
     //  decision_status IN ('confirmer','modifier') + tracking vide/null + zr_locked null
-      const { data: orders, error: ordErr } = await supabase
-      .from("nc_orders")
-      .select("order_id,customer_name,customer_phone,wilaya,commune,adresse,order_total,shopify_delivery_mode,delivery_mode,delivery_type,order_items_summary,shopify_order_name")
-      .eq("archived", false)
-      .is("zr_locked", null)
-      .or("tracking.is.null,tracking.eq.")
-      .or("decision_status.ilike.%confirm%,decision_status.ilike.%modifier%,confirmation_status.ilike.%confirm%");
+    //  Pagination par tranches de 1000 : sans ça, PostgREST plafonne à 1000 lignes/réponse.
+    //  Les commandes incomplètes (sans tel/wilaya) jamais verrouillées s'accumulent et
+    //  saturent ce plafond → les commandes réellement injectables, au-delà de la ligne
+    //  1000, ne sont jamais chargées (symptôme « 0 injectés, 1000 ignorés »).
+    const PAGE = 1000;
+    const orders = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error: ordErr } = await supabase
+        .from("nc_orders")
+        .select("order_id,customer_name,customer_phone,wilaya,commune,adresse,order_total,shopify_delivery_mode,delivery_mode,delivery_type,order_items_summary,shopify_order_name")
+        .eq("archived", false)
+        .is("zr_locked", null)
+        .or("tracking.is.null,tracking.eq.")
+        .or("decision_status.ilike.%confirm%,decision_status.ilike.%modifier%,confirmation_status.ilike.%confirm%")
+        .order("order_id", { ascending: true })
+        .range(from, from + PAGE - 1);
 
-    if (ordErr) throw new Error("Lecture nc_orders: " + ordErr.message);
-    if (!orders?.length) {
+      if (ordErr) throw new Error("Lecture nc_orders: " + ordErr.message);
+      if (!data || data.length === 0) break;
+      orders.push(...data);
+      if (data.length < PAGE) break;
+    }
+
+    if (!orders.length) {
       return NextResponse.json({ ok: true, injected: 0, skipped: 0, errors: 0, results: [], duration_ms: Date.now() - t0, message: "Aucune commande à injecter" });
     }
 
