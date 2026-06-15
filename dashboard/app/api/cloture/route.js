@@ -37,13 +37,25 @@ export async function POST(request) {
     const supabase = adminSB();
 
     // ── 1. Charger toutes les commandes actives (non archivées) ─────
-    const { data: allOrders, error: loadErr } = await supabase
-      .from("nc_orders")
-      .select("order_id, tracking, decision_status, order_source, items_json")
-      .or("archived.is.null,archived.eq.false");
+    //  PostgREST plafonne chaque réponse à ~1000 lignes : sans pagination,
+    //  les commandes au-delà de ce plafond ne sont jamais traitées et
+    //  restent affichées indéfiniment (bug clôture qui « ne fait rien »).
+    //  On pagine donc par tranches de 1000 avec un ordre stable.
+    const PAGE = 1000;
+    const orders = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error: loadErr } = await supabase
+        .from("nc_orders")
+        .select("order_id, tracking, decision_status, order_source, items_json")
+        .or("archived.is.null,archived.eq.false")
+        .order("order_id", { ascending: true })
+        .range(from, from + PAGE - 1);
 
-    if (loadErr) throw new Error("Chargement nc_orders: " + loadErr.message);
-    const orders = allOrders || [];
+      if (loadErr) throw new Error("Chargement nc_orders: " + loadErr.message);
+      if (!data || data.length === 0) break;
+      orders.push(...data);
+      if (data.length < PAGE) break;
+    }
 
     // ── 2. Catégoriser ──────────────────────────────────────────────
     const toArchiveWithTracking = [];  // ont un tracking → archiver
