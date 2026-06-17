@@ -597,9 +597,11 @@ export async function sbGetCompteurs() {
   // Filtre : POS exclus + commandes archivées exclues
   // ⚠️ Pagination obligatoire : _sb() plafonne à 1000 lignes (PostgREST),
   // ce qui tronquait les compteurs dès >1000 commandes actives. _sbAll() pagine via Range.
+  // Exclure POS + archivées. `or=(is.null, neq.pos)` garde les commandes
+  // dont order_source est NULL (un simple neq.pos les écarterait — piège SQL).
   const rows = await _sbAll(
-    "nc_orders?order_source=neq.pos&archived=neq.true&order=order_id"
-    + "&select=decision_status,confirmation_status,contact_status,statut_preparation,archived,tracking"
+    "nc_orders?archived=eq.false&or=(order_source.is.null,order_source.neq.pos)&order=order_id"
+    + "&select=decision_status,contact_status,statut_preparation,archived,tracking"
   );
 
   // Filtre JS de sécurité : exclure les archivées
@@ -608,20 +610,25 @@ export async function sbGetCompteurs() {
   let total = 0, confirmes = 0, annules = 0, a_traiter = 0,
       a_modifier = 0, rappels = 0, injoignables = 0, prepares = 0;
 
-  for (const r of activeRows) {
-    const ds  = (r.decision_status     || "").toLowerCase();
-    const cs  = (r.confirmation_status || "").toLowerCase();
-    const ct  = (r.contact_status      || "").toLowerCase();
-    const sp  = (r.statut_preparation  || "").toLowerCase();
+  // ⚠️ Le statut métier vit dans decision_status (confirmer/annuler/modifier),
+  // PAS dans confirmation_status (toujours "nouveau"). Valeurs alignées sur la
+  // page Confirmation (DECISION_STATUS = confirmer/annuler/modifier).
+  // On retire les accents pour tolérer "confirmé"/"annulé"/"préparée".
+  const noAccent = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-    if (ds === "annule" || cs === "annule") { annules++; continue; }
+  for (const r of activeRows) {
+    const ds = noAccent((r.decision_status    || "").toLowerCase().trim());
+    const ct =          (r.contact_status     || "").toLowerCase();
+    const sp = noAccent((r.statut_preparation || "").toLowerCase().trim());
+
+    if (ds === "annuler" || ds === "annule") { annules++; continue; }
     total++;
-    if (cs === "confirme")      confirmes++;
-    else if (cs === "a modifier" || cs === "amodifier") a_modifier++;
-    else if (ct === "rappel")   rappels++;
-    else if (ct === "injoignable" || ct === "ne repond pas") injoignables++;
-    else                        a_traiter++;
-    if (sp === "prepare" || sp === "préparé" || sp === "pret") prepares++;
+    if (ds === "confirmer" || ds === "confirme") confirmes++;
+    else if (ds === "modifier")            a_modifier++;
+    else if (ct === "rappel")              rappels++;
+    else if (ct.startsWith("injoignable") || ct === "ne repond pas") injoignables++;
+    else                                   a_traiter++;
+    if (sp.startsWith("prepar") || sp === "pret") prepares++;
   }
 
   const taux_confirmation = total > 0 ? Math.round(confirmes / total * 100) : 0;
