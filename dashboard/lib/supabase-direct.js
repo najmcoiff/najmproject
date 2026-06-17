@@ -595,10 +595,11 @@ export async function sbGetPartenaires() {
 
 export async function sbGetCompteurs() {
   // Filtre : POS exclus + commandes archivées exclues
-  const rows = await _sb(
-    "nc_orders?order_source=neq.pos&archived=neq.true"
+  // ⚠️ Pagination obligatoire : _sb() plafonne à 1000 lignes (PostgREST),
+  // ce qui tronquait les compteurs dès >1000 commandes actives. _sbAll() pagine via Range.
+  const rows = await _sbAll(
+    "nc_orders?order_source=neq.pos&archived=neq.true&order=order_id"
     + "&select=decision_status,confirmation_status,contact_status,statut_preparation,archived,tracking"
-    + "&limit=5000"
   );
 
   // Filtre JS de sécurité : exclure les archivées

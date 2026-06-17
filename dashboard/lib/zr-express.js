@@ -25,10 +25,24 @@ function normalizeGeoName(name) {
     .trim();
 }
 
+// ── Alias orthographe : notre nom → orthographe ZR Express ──
+// ZR écrit certaines wilayas/communes différemment de notre référentiel.
+// Ex : on stocke "El Meniaa", mais ZR l'enregistre "El Menia" (un seul 'a'),
+// donc la recherche territoire échouait (Wilaya introuvable).
+// Clé = nom normalisé en minuscules (sans accents) ; valeur = mot-clé envoyé à ZR.
+const ZR_NAME_ALIASES = {
+  "el meniaa": "El Menia",
+};
+
+function zrAlias(name) {
+  const key = normalizeGeoName(name).toLowerCase();
+  return ZR_NAME_ALIASES[key] || name;
+}
+
 // ── Recherche territoire (wilaya/commune → UUID) ─────────────
 export async function zrSearchTerritory(keyword, level = "city") {
   if (!keyword) return null;
-  const normalizedKeyword = normalizeGeoName(keyword);
+  const normalizedKeyword = normalizeGeoName(zrAlias(keyword));
   try {
     const res = await fetch(`${ZR_BASE}/territories/search`, {
       method: "POST",
