@@ -431,7 +431,7 @@ export default function MarketingWarRoom() {
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {[
           { id: "performance", label: "📘 Campagnes Meta" },
-          { id: "whatsapp",  label: "💬 WhatsApp Campagnes" },
+          { id: "whatsapp",  label: "💬 Retargeting & Codes →", href: "/dashboard/owner/retargeting" },
           { id: "recommendations", label: `🤖 Recommandations${pendingRecs.length > 0 ? ` (${pendingRecs.length})` : ""}` },
           { id: "kanban",   label: "📋 Kanban" },
           { id: "journal",  label: "📖 Journal IA" },
@@ -440,7 +440,7 @@ export default function MarketingWarRoom() {
         ].map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => t.href ? router.push(t.href) : setTab(t.id)}
             className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition -mb-px border-b-2
               ${tab === t.id ? "border-gray-900 text-gray-900 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
