@@ -120,6 +120,7 @@ export async function GET(request) {
       anciens: 0, anciens_eligible: 0, // réservoir Shopify jamais recontacté
     };
     for (const [p, c] of Object.entries(byCust)) {
+      if (c.orders === 0) continue; // ignore les clients dont toutes les commandes sont annulées
       audience.total_customers++;
       const days = c.last ? Math.floor((NOW - c.last) / DAY) : 9999;
       const isVip = c.orders >= 5 || c.spent > 50000;
