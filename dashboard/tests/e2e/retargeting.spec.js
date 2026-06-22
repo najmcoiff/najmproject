@@ -30,9 +30,13 @@ test.describe("Retargeting & Codes promo — suivi dashboard", () => {
     // Cohérence interne : confirmées + annulées + en attente = total
     expect(vip.confirmed + vip.cancelled + vip.pending).toBe(vip.orders_total);
 
-    // Les 14k dormants doivent être reflétés dans les segments
-    expect((d.segments.dormant_60 || 0) + (d.segments.dormant_90 || 0)).toBeGreaterThan(1000);
+    // Audience réelle (calculée en direct, pas la table périmée)
+    expect(d.audience).toBeTruthy();
+    expect(d.audience.total_customers).toBeGreaterThan(1000);
+    expect(d.audience.vip_eligible).toBeGreaterThanOrEqual(0);
+    expect(d.audience.anciens_eligible).toBeGreaterThan(1000); // gros réservoir de win-back
     console.log(`✅ API OK — VIPGOLDEN: ${vip.buyers_unique} acheteurs / ${vip.sent_unique} contactés, profit ${vip.net_profit_est} DA`);
+    console.log(`   Audience: ${d.audience.total_customers} clients, ${d.audience.vip_eligible} VIP éligibles, ${d.audience.anciens_eligible} anciens à réactiver`);
   });
 
   test("la page affiche le titre, le bandeau coupé et la carte VIPGOLDEN", async ({ authedPage, token }) => {
