@@ -6,6 +6,13 @@ export const dynamic = "force-dynamic";
 const MAX_MESSAGES_PER_WEEK = 3;
 const MIN_DELAY_HOURS = 48;
 
+// ⛔ Relances WhatsApp automatiques DÉSACTIVÉES — décision owner 2026-06-22.
+// Raisons : react30 non rentable (~break-even), react60 n'est jamais parti
+// (le cron timeout avant), et on ne veut PAS réenvoyer plusieurs fois au même numéro.
+// La SEGMENTATION continue de tourner (alimente le dashboard Retargeting).
+// On réactivera l'envoi avec un nouveau plan d'attaque une fois le suivi en place.
+const SENDING_ENABLED = false;
+
 export async function GET(req) { return POST(req); }
 
 // Extrait le prénom uniquement (premier mot, max 20 chars)
@@ -136,7 +143,7 @@ export async function POST(req) {
     const watiUrl = process.env.WATI_API_URL;
     const watiToken = process.env.WATI_API_TOKEN;
 
-    for (const msg of reactivationQueue) {
+    for (const msg of (SENDING_ENABLED ? reactivationQueue : [])) {
       // Check weekly limit
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
       const { count } = await sb
