@@ -32,12 +32,27 @@ export async function POST(req) {
 
   try {
     // Step 1: Build client segments from nc_orders
-    const { data: orders } = await sb
-      .from("nc_orders")
-      .select("customer_phone, full_name, customer_name, order_date, total_price, order_source, items_json")
-      .in("order_source", ["nc_boutique", "pos"])
-      .not("customer_phone", "is", null)
-      .order("order_date", { ascending: false });
+    // ⚠️ Pagination obligatoire : sans .range(), PostgREST plafonne à 1000 lignes,
+    // ce qui ne re-segmentait que ~780 clients/jour (le reste devenait périmé).
+    const orders = [];
+    {
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await sb
+          .from("nc_orders")
+          .select("customer_phone, full_name, customer_name, order_date, total_price, order_source, items_json")
+          .in("order_source", ["nc_boutique", "pos"])
+          .not("customer_phone", "is", null)
+          .order("order_date", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        orders.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+    }
 
     if (!orders || orders.length === 0) {
       return NextResponse.json({ ok: true, message: "No orders to segment" });

@@ -27,8 +27,6 @@ const CODE_TEMPLATES = {
   VIPGOLDEN: ["najm_vip_v2", "najm_vip_exclusive"],
 };
 
-const SEGMENTS = ["vip", "active", "dormant_30", "dormant_60", "dormant_90"];
-
 function adminSB() {
   return createClient(SB_URL, SB_SKEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -74,13 +72,15 @@ export async function GET(request) {
       sb, "nc_partenaires", "id,code,nom,percentage,active", null, "code"
     );
 
-    // 2) Commandes avec un code promo (attribution déterministe)
-    const orders = await fetchAll(
+    // 2) TOUTES les commandes (paginé) — sert à l'audience réelle ET à
+    //    l'attribution par coupon. On ne se fie PAS à nc_ai_client_segments
+    //    (table périmée : son cron lit nc_orders sans pagination → plafond 1000).
+    const allOrders = await fetchAll(
       sb, "nc_orders",
-      "order_id,customer_phone,coupon_code,coupon_discount,total_price,order_total,decision_status,archived,order_date",
-      (q) => q.not("coupon_code", "is", null),
-      "order_id"
+      "order_id,customer_phone,coupon_code,coupon_discount,total_price,order_total,decision_status,archived,order_date,order_source",
+      null, "order_id"
     );
+    const orders = allOrders.filter((o) => o.coupon_code != null && String(o.coupon_code).trim() !== "");
 
     // 3) Envois WhatsApp (les 2 systèmes réunis)
     const queue = await fetchAll(
@@ -91,20 +91,50 @@ export async function GET(request) {
     );
     const allSends = [...queue, ...watiLog];
 
-    // 4) Distribution des segments (counts légers, sans charger les lignes)
-    const segments = {};
-    for (const seg of SEGMENTS) {
-      const { count } = await sb
-        .from("nc_ai_client_segments")
-        .select("phone", { count: "exact", head: true })
-        .eq("segment", seg);
-      segments[seg] = count || 0;
-    }
-
     // ── Helpers d'agrégation ──────────────────────────────────────────
     const isValid     = (ds) => /^(confirm|modif)/.test(noAccent((ds || "").toLowerCase()).trim());
     const isCancelled = (ds) => /^annul/.test(noAccent((ds || "").toLowerCase()).trim());
     const totalOf     = (o) => Number(o.total_price) || Number(o.order_total) || 0;
+
+    // ── AUDIENCE RÉELLE (calculée en direct depuis les commandes) ─────
+    // Un client = un téléphone unique (≥9 chiffres). Fidélité hors annulées.
+    const NOW = Date.now(), DAY = 86400000;
+    const byCust = {};
+    for (const o of allOrders) {
+      const p = normPhone(o.customer_phone);
+      if (p.length < 9) continue;
+      const c = (byCust[p] ||= { orders: 0, spent: 0, last: 0, ancien: false });
+      if (!o.order_source) c.ancien = true; // null = ère Shopify (anciens clients)
+      if (isCancelled(o.decision_status)) continue;
+      c.orders++;
+      c.spent += totalOf(o);
+      const t = o.order_date ? new Date(o.order_date).getTime() : 0;
+      if (t > c.last) c.last = t;
+    }
+    const contactedVipSet = new Set(allSends.filter((s) => /vip/i.test(s.template_name || "")).map((s) => normPhone(s.phone)));
+    const contactedAnySet = new Set(allSends.map((s) => normPhone(s.phone)).filter((p) => p.length >= 9));
+
+    const audience = {
+      total_customers: 0, vip: 0, vip_eligible: 0,
+      active: 0, dormant_30: 0, dormant_60: 0, dormant_90: 0,
+      anciens: 0, anciens_eligible: 0, // réservoir Shopify jamais recontacté
+    };
+    for (const [p, c] of Object.entries(byCust)) {
+      audience.total_customers++;
+      const days = c.last ? Math.floor((NOW - c.last) / DAY) : 9999;
+      const isVip = c.orders >= 5 || c.spent > 50000;
+      if (isVip) { audience.vip++; if (!contactedVipSet.has(p)) audience.vip_eligible++; }
+      if      (days <= 30) audience.active++;
+      else if (days <= 60) audience.dormant_30++;
+      else if (days <= 90) audience.dormant_60++;
+      else                 audience.dormant_90++;
+      if (c.ancien && days > 90) { audience.anciens++; if (!contactedAnySet.has(p)) audience.anciens_eligible++; }
+    }
+    // Compat page : buckets de récence (le total réel = audience.total_customers)
+    const segments = {
+      vip: audience.vip, active: audience.active,
+      dormant_30: audience.dormant_30, dormant_60: audience.dormant_60, dormant_90: audience.dormant_90,
+    };
 
     // Pré-calcul des envois par template
     const sendsByTemplate = {};
@@ -218,6 +248,7 @@ export async function GET(request) {
         unique_contacted: allContacted.size,
         total_messages: allSends.length,
       },
+      audience,
       segments,
       codes,
       templates,

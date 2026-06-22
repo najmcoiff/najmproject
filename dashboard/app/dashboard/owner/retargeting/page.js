@@ -52,7 +52,7 @@ export default function RetargetingPage() {
   if (error)   return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>;
   if (!data)   return null;
 
-  const { reach, segments, codes, templates, generated_at, sending_enabled } = data;
+  const { reach, segments, audience, codes, templates, generated_at, sending_enabled } = data;
   const campaignCodes = codes.filter((c) => c.is_campaign);
   const partnerCodes  = codes.filter((c) => !c.is_campaign && c.orders_total > 0);
 
@@ -82,7 +82,7 @@ export default function RetargetingPage() {
         <Kpi label="Numéros uniques contactés" value={fmt(reach.unique_contacted)} sub="tous templates" />
         <Kpi label="Messages envoyés (total)" value={fmt(reach.total_messages)} />
         <Kpi label="Codes avec ventes" value={fmt(codes.filter((c) => c.orders_total > 0).length)} />
-        <Kpi label="Base clients segmentée" value={fmt(Object.values(segments).reduce((a, b) => a + b, 0))} />
+        <Kpi label="Clients réels (avec tél.)" value={fmt(audience?.total_customers)} sub="boutique + anciens" />
       </div>
 
       {/* Codes de campagne (retargeting) */}
@@ -93,18 +93,21 @@ export default function RetargetingPage() {
         </div>
       </section>
 
-      {/* Segments */}
+      {/* Audience réelle & cibles */}
       <section>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Répartition des clients (segments)</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Audience réelle (calculée en direct)</h2>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {Object.entries(SEG_LABELS).map(([key, label]) => (
-            <Kpi key={key} label={label} value={fmt(segments[key])}
-                 tone={key.startsWith("dormant_6") || key === "dormant_90" ? "red" : "white"} />
-          ))}
+          <Kpi label="Actifs (<30j)"   value={fmt(audience?.active)} tone="green" />
+          <Kpi label="Dormant 30-60j"  value={fmt(audience?.dormant_30)} />
+          <Kpi label="Dormant 60-90j"  value={fmt(audience?.dormant_60)} />
+          <Kpi label="Dormant 90j+"    value={fmt(audience?.dormant_90)} tone="red" />
+          <Kpi label="VIP (≥5 cmd / >50k)" value={fmt(audience?.vip)} sub={`${fmt(audience?.vip_eligible)} éligibles`} tone="blue" />
         </div>
-        <p className="text-xs text-gray-400 mt-2">
-          🔴 {fmt((segments.dormant_60 || 0) + (segments.dormant_90 || 0))} clients dormants (60j+) non relancés actuellement.
-        </p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          💡 <b>Réservoir à réactiver</b> : {fmt(audience?.anciens)} anciens clients (ère Shopify, 90j+),
+          dont <b>{fmt(audience?.anciens_eligible)}</b> jamais recontactés → c'est la vraie cible de win-back
+          (envoi unique recommandé, après batch test).
+        </div>
       </section>
 
       {/* Codes partenaires (avec ventes) */}
