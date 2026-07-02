@@ -308,15 +308,29 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, campaign_id: campaign.id, queued: 0, status: "draft" });
   }
 
-  // ── Anti-duplicate PER TEMPLATE sur 30 jours ──────────────────────────────
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-  const { data: alreadySentThisTemplate } = await sb
-    .from("nc_wati_message_log")
-    .select("phone")
-    .eq("template_name", template_name)
-    .gte("sent_at", thirtyDaysAgo)
-    .in("status", ["sent", "delivered", "read", "replied", "converted"]);
-  const alreadyGotThisTemplate = new Set((alreadySentThisTemplate || []).map(m => m.phone));
+  // ── Anti-doublon STRICT — « jamais deux fois » (décision owner) ───────────
+  // On exclut TOUT numéro déjà contacté par n'importe quel template, all-time,
+  // sur les DEUX systèmes d'envoi (log WATI + file d'automatisation), avec un
+  // matching par les 9 derniers chiffres (formats variés : 0…, +213…, 213…).
+  const normPhone = (p) => String(p || "").replace(/\D/g, "").slice(-9);
+  const everContacted = new Set();
+  for (const table of ["nc_wati_message_log", "nc_ai_whatsapp_queue"]) {
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data: rows, error: pErr } = await sb
+        .from(table)
+        .select("phone")
+        .range(from, from + PAGE - 1);
+      if (pErr || !rows || rows.length === 0) break;
+      for (const r of rows) {
+        const k = normPhone(r.phone);
+        if (k.length >= 9) everContacted.add(k);
+      }
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
   // Récupérer les contacts par pages pour dépasser la limite 1000 de Supabase
   let contacts = [];
@@ -335,7 +349,7 @@ export async function POST(req) {
     if (page2 > 20) break; // max 20000 contacts par campagne
   }
 
-  const eligible = contacts.filter(c => !alreadyGotThisTemplate.has(c.phone));
+  const eligible = contacts.filter(c => !everContacted.has(normPhone(c.phone)));
   const toSend   = eligible.slice(0, daily_limit);
 
   function buildParams(contact) {
