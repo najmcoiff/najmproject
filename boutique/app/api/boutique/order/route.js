@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { generateOrderPrefix, buildOrderName, hashString, getClientIp } from "@/lib/utils";
 import { isValidAlgerianPhone, normalizePhone, calcCartTotal } from "@/lib/utils";
 import { LOG_TYPES, ORDER_SOURCES, EVENT_TYPES, MOVEMENT_TYPES } from "@/lib/constants";
+import { normPhone, computeMargin, resolveCode, resolveParrain, commissionFor } from "@/lib/ambassadeur";
 import { randomUUID } from "crypto";
 
 /**
@@ -32,7 +33,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
   }
 
-  const { items, customer, delivery_price, coupon, session_id, idempotency_key, utm, world } = body;
+  const { items, customer, delivery_price, coupon, session_id, idempotency_key, utm, world, ambassadeur_code, spend_credit_code } = body;
 
   // ── Validation ───────────────────────────────────────────
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -142,7 +143,21 @@ export async function POST(request) {
       return sum + Math.round(base * coupon.percentage / 100) * Number(item.qty);
     }, 0);
   })();
-  const total = cartTotal - couponDiscount + deliveryPrice;
+  // ── Crédit ambassadeur dépensé (le coiffeur commande pour LUI) ────────────
+  // Discount = min(cagnotte dispo, marge, panier) → jamais sous ton coût.
+  // Sécurité : seulement si le numéro acheteur = le numéro du coiffeur.
+  let creditSpent = 0;
+  let spendAmb = null;
+  if (spend_credit_code) {
+    const amb = await resolveCode(sb, spend_credit_code);
+    if (amb && normPhone(amb.phone) === normPhone(phone) && Number(amb.cagnotte_da) > 0) {
+      const { marge } = await computeMargin(sb, items);
+      creditSpent = Math.max(0, Math.min(Number(amb.cagnotte_da), marge, cartTotal - couponDiscount));
+      if (creditSpent > 0) spendAmb = amb;
+    }
+  }
+
+  const total = cartTotal - couponDiscount - creditSpent + deliveryPrice;
 
   const now = new Date().toISOString();
 
@@ -197,6 +212,11 @@ export async function POST(request) {
   // ── Déduction stock (atomique par variante) ───────────────
   await deductStock(sb, newOrder, items);
 
+  // ── Crédit ambassadeur dépensé → débiter la cagnotte du coiffeur ──────────
+  if (spendAmb && creditSpent > 0) {
+    await spendCoiffeurCredit(sb, newOrder, spendAmb, creditSpent);
+  }
+
   // ── Logs post-création ────────────────────────────────────
   const clientIp = getClientIp(request);
   const ipHash = await hashString(clientIp).catch(() => "unknown");
@@ -220,6 +240,8 @@ export async function POST(request) {
     }),
     // Attribution WhatsApp : si ce numéro a reçu un message dans les 72h → conversion
     attributeWhatsAppConversion(sb, phone, newOrder.order_id, total),
+    // Programme Ambassadeur (Couche 1) : commission coiffeur / rente parrain
+    creditAmbassadeur(sb, newOrder, items, phone, ambassadeur_code),
     // Meta CAPI Purchase (server-side — bypass adblockers)
     sendPurchaseCAPI({
       world:      world || null,
@@ -236,7 +258,35 @@ export async function POST(request) {
     ok: true,
     order_id: newOrder.order_id,
     order_name: newOrder.order_name,
+    credit_spent: creditSpent || 0,
   });
+}
+
+// Débite la cagnotte du coiffeur quand il paie une partie avec son crédit,
+// et trace le mouvement dans le grand livre (montant négatif).
+async function spendCoiffeurCredit(sb, order, amb, amount) {
+  try {
+    const phone = normPhone(amb.phone);
+    const { data: a } = await sb.from("nc_ambassadeurs").select("cagnotte_da").eq("phone", phone).maybeSingle();
+    if (!a) return;
+    const newBal = Math.max(0, Number(a.cagnotte_da || 0) - amount);
+    await sb.from("nc_ambassadeurs")
+      .update({ cagnotte_da: newBal, updated_at: new Date().toISOString() })
+      .eq("phone", phone);
+    await sb.from("nc_ambassadeur_commissions").insert({
+      ambassadeur_code:  amb.code,
+      ambassadeur_phone: phone,
+      order_id:          order.order_id,
+      scenario:          "depense_credit",
+      marge_da:  0,
+      taux_pct:  0,
+      montant_da: -amount,          // négatif = dépense
+      statut:    "valide",
+      validated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("[spendCoiffeurCredit] Error:", e.message);
+  }
 }
 
 // ── Déduction stock + audit trail ────────────────────────────
@@ -421,6 +471,97 @@ async function sendPurchaseCAPI({ world, session_id, order_id, items, total, cli
     });
   } catch {
     // CAPI failure must never block order creation
+  }
+}
+
+// ── Programme Ambassadeur — Couche 1 ────────────────────────────────────────
+// Scénario 2 : commande AVEC code coiffeur      → coiffeur 50 % (vente directe)
+// Scénario 3 : rachat SANS code (tel attribué)  → parrain 20 % (rente)
+// Le client ne reçoit AUCUNE remise ici (Couche 1 = express + garanties, coût 0).
+// La commission reste 'en_attente' jusqu'au COD confirmé + payé (voir dashboard).
+async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
+  try {
+    const phone = normPhone(rawPhone);
+    if (phone.length < 9) return;
+
+    let earner = null;       // { code, phone } de celui qui touche
+    let scenario = null;
+    let isNewLien = false;
+
+    const existingLien = await resolveParrain(sb, phone);
+
+    if (ambassadeurCode) {
+      // Scénario 2 — le client utilise un code coiffeur
+      const amb = await resolveCode(sb, ambassadeurCode);
+      if (!amb) return;                              // code inconnu → rien
+      if (normPhone(amb.phone) === phone) return;    // auto-parrainage interdit
+      earner   = { code: amb.code, phone: normPhone(amb.phone) };
+      scenario = "2_vente_directe";
+      if (!existingLien) isNewLien = true;
+    } else if (existingLien) {
+      // Scénario 3 — rachat sans code, numéro déjà attribué à un parrain
+      earner   = { code: existingLien.ambassadeur_code, phone: normPhone(existingLien.ambassadeur_phone) };
+      scenario = "3_rente_sans_code";
+    } else {
+      return; // commande organique — aucun ambassadeur
+    }
+
+    // Marge réelle (INTERNE) + montant selon la grille (plancher NajmCoiff 40 %)
+    const { marge } = await computeMargin(sb, items);
+    const comm    = commissionFor(scenario, marge, { hasParrain: scenario === "3_rente_sans_code" });
+    const montant = scenario === "2_vente_directe" ? comm.self_da   : comm.parrain_da;
+    const taux    = scenario === "2_vente_directe" ? comm.taux_self : comm.taux_parrain;
+
+    // Graver l'attribution si nouveau filleul (une fois, à vie)
+    if (isNewLien) {
+      await sb.from("nc_ambassadeur_liens").insert({
+        ambassadeur_code:  earner.code,
+        ambassadeur_phone: earner.phone,
+        filleul_phone:     phone,
+        filleul_type:      "client",
+        premiere_order_id: order.order_id,
+      });
+      const { data: a } = await sb.from("nc_ambassadeurs")
+        .select("total_filleuls").eq("phone", earner.phone).maybeSingle();
+      if (a) {
+        await sb.from("nc_ambassadeurs")
+          .update({ total_filleuls: (a.total_filleuls || 0) + 1, updated_at: new Date().toISOString() })
+          .eq("phone", earner.phone);
+      }
+    }
+
+    // Marquer l'attribution sur la commande
+    await sb.from("nc_orders").update({
+      ambassadeur_code:  earner.code,
+      ambassadeur_phone: earner.phone,
+    }).eq("order_id", order.order_id);
+
+    // Enregistrer la commission (en attente jusqu'au COD payé)
+    if (montant > 0) {
+      const { error: commErr } = await sb.from("nc_ambassadeur_commissions").insert({
+        ambassadeur_code:  earner.code,
+        ambassadeur_phone: earner.phone,
+        order_id:          order.order_id,
+        filleul_phone:     phone,
+        scenario,
+        marge_da:  marge,
+        taux_pct:  Math.round(taux * 100),
+        montant_da: montant,
+        statut:    "en_attente",
+      });
+      if (!commErr) {
+        // Refléter en "cagnotte en attente" (débloquée quand COD payé)
+        const { data: a } = await sb.from("nc_ambassadeurs")
+          .select("cagnotte_attente_da").eq("phone", earner.phone).maybeSingle();
+        if (a) {
+          await sb.from("nc_ambassadeurs")
+            .update({ cagnotte_attente_da: Number(a.cagnotte_attente_da || 0) + montant })
+            .eq("phone", earner.phone);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[creditAmbassadeur] Error:", err.message);
   }
 }
 

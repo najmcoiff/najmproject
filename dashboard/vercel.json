@@ -15,6 +15,7 @@
     { "path": "/api/ai/stock-forecast", "schedule": "0 5 * * 1" },
     { "path": "/api/ai/daily-report", "schedule": "0 8 * * *" },
     { "path": "/api/bi/daily-report", "schedule": "0 19 * * *" },
-    { "path": "/api/bi/snapshot",     "schedule": "55 22 * * *" }
+    { "path": "/api/bi/snapshot",     "schedule": "55 22 * * *" },
+    { "path": "/api/ambassadeur/validate-delivery", "schedule": "30 21 * * *" }
   ]
 }

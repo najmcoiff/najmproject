@@ -61,6 +61,12 @@ export default function CommanderPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState("");
 
+  // Code ambassadeur (posé par la page /g/[code] — le client ne le voit pas,
+  // il ne lui donne AUCUNE remise : il crédite le coiffeur qui l'a ramené).
+  const [ambassadeurCode, setAmbassadeurCode] = useState(null);
+  // Crédit coiffeur à dépenser sur SA propre commande (posé par son espace)
+  const [spendCode, setSpendCode] = useState(null);
+
   // Monde → accent
   const [world, setWorld]           = useState("coiffure");
   const accent = world === "onglerie" ? "#e8a0bf" : "#e63012";
@@ -98,6 +104,18 @@ export default function CommanderPage() {
     try {
       const saved = sessionStorage.getItem("nc_coupon");
       if (saved) setCoupon(JSON.parse(saved));
+    } catch {}
+
+    // Lire le code ambassadeur (posé par /g/[code], persistant)
+    try {
+      const amb = localStorage.getItem("nc_ambassadeur");
+      if (amb) setAmbassadeurCode(amb);
+    } catch {}
+
+    // Lire le crédit coiffeur à dépenser (posé par son espace)
+    try {
+      const sp = localStorage.getItem("nc_coiffeur_spend");
+      if (sp) setSpendCode(sp);
     } catch {}
   }, []);
 
@@ -279,6 +297,8 @@ export default function CommanderPage() {
         },
         delivery_price:   deliveryPrice,
         coupon:           coupon || null,
+        ambassadeur_code: ambassadeurCode || null,
+        spend_credit_code: spendCode || null,
         session_id:       getSessionId(),
         idempotency_key:  idempotencyRef.current,
         utm: {
@@ -305,6 +325,7 @@ export default function CommanderPage() {
       // Succès → vider le panier + coupon + rediriger
       clearCart();
       sessionStorage.removeItem("nc_coupon");
+      try { localStorage.removeItem("nc_coiffeur_spend"); } catch {}
       router.push(`/merci/${data.order_name || data.order_id}`);
     } catch {
       setServerError("خطأ في الاتصال. تحقق من الإنترنت وأعد المحاولة.");
