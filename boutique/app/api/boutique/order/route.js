@@ -506,13 +506,8 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
       return; // commande organique — aucun ambassadeur
     }
 
-    // Marge réelle (INTERNE) + montant selon la grille (plancher NajmCoiff 40 %)
-    const { marge } = await computeMargin(sb, items);
-    const comm    = commissionFor(scenario, marge, { hasParrain: scenario === "3_rente_sans_code" });
-    const montant = scenario === "2_vente_directe" ? comm.self_da   : comm.parrain_da;
-    const taux    = scenario === "2_vente_directe" ? comm.taux_self : comm.taux_parrain;
-
-    // Graver l'attribution si nouveau filleul (une fois, à vie)
+    // Graver l'attribution EN PREMIER (robuste) : lien + commande sauvés AVANT
+    // tout calcul → une erreur transitoire de marge ne perd pas l'attribution.
     if (isNewLien) {
       await sb.from("nc_ambassadeur_liens").insert({
         ambassadeur_code:  earner.code,
@@ -529,12 +524,16 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
           .eq("phone", earner.phone);
       }
     }
-
-    // Marquer l'attribution sur la commande
     await sb.from("nc_orders").update({
       ambassadeur_code:  earner.code,
       ambassadeur_phone: earner.phone,
     }).eq("order_id", order.order_id);
+
+    // Marge réelle (INTERNE) + montant selon la grille (plancher NajmCoiff 40 %)
+    const { marge } = await computeMargin(sb, items);
+    const comm    = commissionFor(scenario, marge, { hasParrain: scenario === "3_rente_sans_code" });
+    const montant = scenario === "2_vente_directe" ? comm.self_da   : comm.parrain_da;
+    const taux    = scenario === "2_vente_directe" ? comm.taux_self : comm.taux_parrain;
 
     // Enregistrer la commission (en attente jusqu'au COD payé)
     if (montant > 0) {
