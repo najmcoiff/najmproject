@@ -71,7 +71,7 @@ export default function GarantiePage() {
 
 function Shell({ children }) {
   return (
-    <main dir="rtl" className="min-h-screen bg-[#F3EEE3] px-4 py-8">
+    <main dir="rtl" className="min-h-screen bg-[#F3EEE3] px-4 py-8" style={{ color: "#2B2419" }}>
       <div className="max-w-[420px] mx-auto flex flex-col gap-4">
         <div className="text-center text-base font-bold mb-1"><span style={{ color: "#9C7A34" }}>نجم</span> كواف</div>
         {children}

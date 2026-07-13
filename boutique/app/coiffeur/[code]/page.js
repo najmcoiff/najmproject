@@ -169,7 +169,7 @@ export default function CoiffeurSpace() {
 
 function Shell({ children }) {
   return (
-    <main dir="rtl" className="min-h-screen bg-[#F3EEE3] px-4 py-6">
+    <main dir="rtl" className="min-h-screen bg-[#F3EEE3] px-4 py-6" style={{ color: "#2B2419" }}>
       <div className="max-w-[440px] mx-auto flex flex-col gap-4">
         <div className="flex items-center justify-between px-1">
           <div className="text-base font-bold"><span style={{ color: "#9C7A34" }}>نجم</span> كواف · شريك</div>
