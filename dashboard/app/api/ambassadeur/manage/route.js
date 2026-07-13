@@ -36,18 +36,20 @@ export async function GET(req) {
   });
 }
 
-// Template NEUTRE (notification de compte) — Meta rejette le contenu
-// "partenaire / code / gagner" (politique affiliation). 1 seule variable : prénom.
-// Tout le reste (code, gains) vit dans l'espace, derrière le lien.
+// Template NEUTRE (notification de compte). Meta rejette le THÈME affiliation
+// (partenaire + partage + gagner), pas le mot "code". On garde le code mais
+// présenté en "numéro de compte", sans solliciter le partage/gain.
+// Variables : {{1}} prénom · {{2}} code (présenté comme n° de compte).
 const WELCOME_TPL = "nc_compte_pret";
 
 async function sendWelcomeWati(phone9, code, fullName) {
   const url = (process.env.WATI_API_URL || "").replace(/\/$/, "");
   const token = process.env.WATI_API_TOKEN;
-  if (!url || !token) return false;
+  if (!url || !token || !code) return false;
   const first = (fullName || "").trim().split(/\s+/)[0] || "";
   const params = [
     { name: "1", value: first },
+    { name: "2", value: code },
   ];
   try {
     const r = await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
