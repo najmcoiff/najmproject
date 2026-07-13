@@ -18,6 +18,7 @@ export default function CartDrawer() {
   const [coupon, setCoupon]           = useState(null);   // { percentage, nom, code }
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [ambassadeurInfo, setAmbassadeurInfo] = useState(null); // {code, first_name} si code coiffeur
   const [world, setWorld]             = useState("coiffure");
 
   const { items, total, updateQty, removeFromCart } = useCart();
@@ -41,6 +42,15 @@ export default function CartDrawer() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       setWorld(sessionStorage.getItem("nc_world") || "coiffure");
+      try {
+        const amb = localStorage.getItem("nc_ambassadeur");
+        if (amb) {
+          fetch(`/api/boutique/ambassadeur?code=${encodeURIComponent(amb)}`)
+            .then((r) => r.json())
+            .then((d) => { if (d.valid) setAmbassadeurInfo(d); })
+            .catch(() => {});
+        }
+      } catch {}
     }
     function handleOpen() { setOpen(true); }
     window.addEventListener("nc_open_cart", handleOpen);
@@ -87,8 +97,18 @@ export default function CartDrawer() {
           sessionStorage.setItem("nc_coupon", JSON.stringify(data));
         }
       } else {
-        setCouponError(data.error || "الكود غير صحيح");
-        sessionStorage.removeItem("nc_coupon");
+        // Pas un code promo → est-ce un code ambassadeur (coiffeur) ?
+        const ares  = await fetch(`/api/boutique/ambassadeur?code=${encodeURIComponent(code)}`);
+        const adata = await ares.json();
+        if (adata.valid) {
+          setAmbassadeurInfo(adata);
+          try { localStorage.setItem("nc_ambassadeur", adata.code); } catch {}
+          setCouponCode("");
+          setCouponError("");
+        } else {
+          setCouponError(data.error || "الكود غير صحيح");
+          sessionStorage.removeItem("nc_coupon");
+        }
       }
     } catch {
       setCouponError("خطأ في الاتصال، حاول مجدداً");
@@ -287,7 +307,40 @@ export default function CartDrawer() {
           <div className="shrink-0 px-4 pb-6 pt-3 space-y-4" style={{ borderTop: "1px solid #2a2a2a" }}>
 
             {/* Code partenaire */}
-            {!coupon ? (
+            {coupon ? (
+              <div
+                className="flex items-center justify-between rounded-xl px-3 py-2.5"
+                style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}
+              >
+                <div>
+                  <p className="text-xs font-bold" style={{ color: "#22c55e" }}>
+                    ✓ كود الشريك {coupon.code}
+                  </p>
+                  <p className="text-xs" style={{ color: "#a0a0a0" }}>{coupon.nom}</p>
+                </div>
+                <button onClick={removeCoupon} className="text-xs" style={{ color: "#a0a0a0" }}>
+                  حذف
+                </button>
+              </div>
+            ) : ambassadeurInfo ? (
+              <div
+                className="flex items-center justify-between rounded-xl px-3 py-2.5"
+                style={{ background: "rgba(203,164,92,0.12)", border: "1px solid rgba(203,164,92,0.35)" }}
+              >
+                <div>
+                  <p className="text-xs font-bold" style={{ color: "#CBA45C" }}>
+                    ✓ تطلب تحت ضمان {ambassadeurInfo.first_name}
+                  </p>
+                  <p className="text-xs" style={{ color: "#a0a0a0" }}>توصيل سريع · منتج أصلي مضمون</p>
+                </div>
+                <button
+                  onClick={() => { setAmbassadeurInfo(null); try { localStorage.removeItem("nc_ambassadeur"); } catch {} }}
+                  className="text-xs" style={{ color: "#a0a0a0" }}
+                >
+                  حذف
+                </button>
+              </div>
+            ) : (
               <div>
                 <p className="text-xs mb-1.5" style={{ color: "#a0a0a0" }}>أدخل كود الشريك</p>
                 <div className="flex gap-2">
@@ -317,21 +370,6 @@ export default function CartDrawer() {
                 {couponError && (
                   <p className="text-xs mt-1.5" style={{ color: "#e63012" }}>{couponError}</p>
                 )}
-              </div>
-            ) : (
-              <div
-                className="flex items-center justify-between rounded-xl px-3 py-2.5"
-                style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}
-              >
-                <div>
-                  <p className="text-xs font-bold" style={{ color: "#22c55e" }}>
-                    ✓ كود الشريك {coupon.code}
-                  </p>
-                  <p className="text-xs" style={{ color: "#a0a0a0" }}>{coupon.nom}</p>
-                </div>
-                <button onClick={removeCoupon} className="text-xs" style={{ color: "#a0a0a0" }}>
-                  حذف
-                </button>
               </div>
             )}
 
