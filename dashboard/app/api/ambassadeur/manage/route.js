@@ -47,12 +47,13 @@ async function sendWelcomeWati(phone9, code, fullName) {
   const token = process.env.WATI_API_TOKEN;
   if (!url || !token || !code) return false;
   const first = (fullName || "").trim().split(/\s+/)[0] || "";
-  // 1 seule variable : {{name}} (prénom). PAS de code dans le message :
-  // un code type "NC7UR7D" fait classer le template en Authentification (OTP)
-  // par Meta → "catégorie ne correspond pas" → rejet. Le coiffeur voit son
-  // code sur son espace (derrière le lien).
+  // {{name}} = prénom · {{ref}} = code, MAIS placé uniquement dans l'URL du
+  // template (www.najmcoiff.com/coiffeur/{{ref}}) → lien direct vers l'espace,
+  // sans login. Le code dans une URL (pas comme "code: X") évite que Meta le
+  // classe en OTP. Pattern déjà approuvé (cf. najm_order_v2 /suivi/{{3}}).
   const params = [
     { name: "name", value: first },
+    { name: "ref", value: code },
   ];
   try {
     const r = await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
