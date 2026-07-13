@@ -40,7 +40,7 @@ export async function GET(req) {
 // (partenaire + partage + gagner), pas le mot "code". On garde le code mais
 // présenté en "numéro de compte", sans solliciter le partage/gain.
 // Variables : {{1}} prénom · {{2}} code (présenté comme n° de compte).
-const WELCOME_TPL = "nc_compte_pret";
+const WELCOME_TPL = "nc_activation";
 
 async function sendWelcomeWati(phone9, code, fullName) {
   const url = (process.env.WATI_API_URL || "").replace(/\/$/, "");
