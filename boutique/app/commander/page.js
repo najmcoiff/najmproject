@@ -64,6 +64,7 @@ export default function CommanderPage() {
   // Code ambassadeur (posé par la page /g/[code] — le client ne le voit pas,
   // il ne lui donne AUCUNE remise : il crédite le coiffeur qui l'a ramené).
   const [ambassadeurCode, setAmbassadeurCode] = useState(null);
+  const [ambassadeurInfo, setAmbassadeurInfo] = useState(null); // {code, first_name} si code coiffeur saisi
   // Crédit coiffeur à dépenser sur SA propre commande (posé par son espace)
   const [spendCode, setSpendCode] = useState(null);
 
@@ -106,10 +107,16 @@ export default function CommanderPage() {
       if (saved) setCoupon(JSON.parse(saved));
     } catch {}
 
-    // Lire le code ambassadeur (posé par /g/[code], persistant)
+    // Lire le code ambassadeur (posé par /g/[code] ou saisi au checkout)
     try {
       const amb = localStorage.getItem("nc_ambassadeur");
-      if (amb) setAmbassadeurCode(amb);
+      if (amb) {
+        setAmbassadeurCode(amb);
+        fetch(`/api/boutique/ambassadeur?code=${encodeURIComponent(amb)}`)
+          .then((r) => r.json())
+          .then((d) => { if (d.valid) setAmbassadeurInfo(d); })
+          .catch(() => {});
+      }
     } catch {}
 
     // Lire le crédit coiffeur à dépenser (posé par son espace)
@@ -169,7 +176,18 @@ export default function CommanderPage() {
         setCouponCode("");
         setCouponError("");
       } else {
-        setCouponError(data.error || "الكود غير صحيح");
+        // Pas un code promo → est-ce un code ambassadeur (coiffeur) ?
+        const ares  = await fetch(`/api/boutique/ambassadeur?code=${encodeURIComponent(code)}`);
+        const adata = await ares.json();
+        if (adata.valid) {
+          setAmbassadeurCode(adata.code);
+          setAmbassadeurInfo(adata);
+          try { localStorage.setItem("nc_ambassadeur", adata.code); } catch {}
+          setCouponCode("");
+          setCouponError("");
+        } else {
+          setCouponError(data.error || "الكود غير صحيح");
+        }
       }
     } catch {
       setCouponError("خطأ في الاتصال، حاول مجدداً");
@@ -501,6 +519,33 @@ export default function CommanderPage() {
               )}
             </div>
           </div>
+
+          {/* ── Bandeau "sous garantie du coiffeur" (code ambassadeur) ──── */}
+          {ambassadeurInfo && (
+            <div
+              className="w-full flex items-center justify-between rounded-xl px-4 py-3"
+              style={{ background: "rgba(203,164,92,0.12)", border: "1px solid rgba(203,164,92,0.35)" }}
+            >
+              <div dir="rtl">
+                <p className="text-sm font-bold" style={{ color: "#CBA45C" }}>
+                  ✓ تطلب تحت ضمان {ambassadeurInfo.first_name}
+                </p>
+                <p className="text-xs" style={{ color: "#a0a0a0" }}>توصيل سريع · منتج أصلي مضمون</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAmbassadeurCode(null);
+                  setAmbassadeurInfo(null);
+                  try { localStorage.removeItem("nc_ambassadeur"); } catch {}
+                }}
+                className="text-xs"
+                style={{ color: "#666" }}
+              >
+                حذف
+              </button>
+            </div>
+          )}
 
           {/* ── Section coupon ─────────────────────────────────────────── */}
           {coupon ? (
