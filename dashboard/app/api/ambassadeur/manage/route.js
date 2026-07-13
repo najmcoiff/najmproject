@@ -36,6 +36,34 @@ export async function GET(req) {
   });
 }
 
+// Template Meta à créer + faire approuver, puis l'envoi WATI se déclenche seul.
+// Variables : {{1}} prénom · {{2}} code · {{3}} lien de l'espace
+const WELCOME_TPL = "najm_ambassadeur_welcome";
+
+async function sendWelcomeWati(phone9, code, fullName) {
+  const url = (process.env.WATI_API_URL || "").replace(/\/$/, "");
+  const token = process.env.WATI_API_TOKEN;
+  if (!url || !token || !code) return false;
+  const first = (fullName || "").trim().split(/\s+/)[0] || "";
+  const link = `https://www.najmcoiff.com/coiffeur/${code}`;
+  const params = [
+    { name: "1", value: first },
+    { name: "2", value: code },
+    { name: "3", value: link },
+  ];
+  try {
+    const r = await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ template_name: WELCOME_TPL, broadcast_name: `amb_welcome_${Date.now()}`, parameters: params }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return j.result === true || !!j.id;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req) {
   if (!ownerGuard(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
@@ -43,11 +71,26 @@ export async function POST(req) {
   if (phone.length < 9) return NextResponse.json({ error: "phone requis" }, { status: 400 });
 
   const sb = adminSB();
+  const active = !!body.active;
+
+  // Récupérer code + nom (pour le WhatsApp de bienvenue)
+  const { data: row } = await sb
+    .from("nc_ambassadeurs")
+    .select("code, full_name")
+    .eq("phone", phone)
+    .maybeSingle();
+
   const { error } = await sb
     .from("nc_ambassadeurs")
-    .update({ actif: !!body.active, updated_at: new Date().toISOString() })
+    .update({ actif: active, updated_at: new Date().toISOString() })
     .eq("phone", phone);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  // À l'activation : tenter le WhatsApp de bienvenue via WATI (best-effort).
+  // Échoue silencieusement tant que le template n'est pas approuvé → fallback wa.me.
+  let wa_sent = false;
+  if (active && row?.code) wa_sent = await sendWelcomeWati(phone, row.code, row.full_name);
+
+  return NextResponse.json({ ok: true, wa_sent });
 }

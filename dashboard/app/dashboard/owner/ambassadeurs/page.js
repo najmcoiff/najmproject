@@ -10,6 +10,7 @@ export default function AmbassadeursOwnerPage() {
   const [active, setActive]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState("");
+  const [notice, setNotice]   = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -27,11 +28,18 @@ export default function AmbassadeursOwnerPage() {
   async function setActif(phone, val) {
     setBusy(phone);
     try {
-      await fetch("/api/ambassadeur/manage", {
+      const r = await fetch("/api/ambassadeur/manage", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ phone, active: val }),
       });
+      const d = await r.json();
+      if (val) {
+        setNotice(d.wa_sent
+          ? "✅ Activé — WhatsApp de bienvenue envoyé automatiquement."
+          : "✅ Activé — clique « Envoyer WhatsApp » (l'envoi auto s'activera quand le template Meta sera approuvé).");
+        setTimeout(() => setNotice(""), 6000);
+      }
       await load();
     } catch {}
     finally { setBusy(""); }
@@ -54,7 +62,11 @@ export default function AmbassadeursOwnerPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-bold text-gray-900 mb-1">👑 Ambassadeurs coiffeurs</h1>
-      <p className="text-sm text-gray-500 mb-6">Valide les inscriptions, puis envoie le lien par WhatsApp.</p>
+      <p className="text-sm text-gray-500 mb-4">Valide les inscriptions, puis envoie le lien par WhatsApp.</p>
+
+      {notice && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-xl px-4 py-3 mb-4">{notice}</div>
+      )}
 
       {/* En attente */}
       <h2 className="text-sm font-bold text-gray-700 mb-3">
