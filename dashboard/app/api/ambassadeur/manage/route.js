@@ -47,9 +47,10 @@ async function sendWelcomeWati(phone9, code, fullName) {
   const token = process.env.WATI_API_TOKEN;
   if (!url || !token || !code) return false;
   const first = (fullName || "").trim().split(/\s+/)[0] || "";
+  // Variables NOMMÉES (l'éditeur Meta/WATI refuse les numéros) : {{name}} {{code}}
   const params = [
-    { name: "1", value: first },
-    { name: "2", value: code },
+    { name: "name", value: first },
+    { name: "code", value: code },
   ];
   try {
     const r = await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
