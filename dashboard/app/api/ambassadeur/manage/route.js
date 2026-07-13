@@ -37,7 +37,8 @@ export async function GET(req) {
 }
 
 // Template Meta à créer + faire approuver, puis l'envoi WATI se déclenche seul.
-// Variables : {{1}} prénom · {{2}} code · {{3}} lien de l'espace
+// Variables : {{1}} prénom · {{2}} code. Le lien = BOUTON STATIQUE dans le template
+// (Meta REJETTE une URL complète passée en variable → jamais de lien en {{n}}).
 const WELCOME_TPL = "najm_ambassadeur_welcome";
 
 async function sendWelcomeWati(phone9, code, fullName) {
@@ -45,11 +46,9 @@ async function sendWelcomeWati(phone9, code, fullName) {
   const token = process.env.WATI_API_TOKEN;
   if (!url || !token || !code) return false;
   const first = (fullName || "").trim().split(/\s+/)[0] || "";
-  const link = `https://www.najmcoiff.com/coiffeur/${code}`;
   const params = [
     { name: "1", value: first },
     { name: "2", value: code },
-    { name: "3", value: link },
   ];
   try {
     const r = await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
