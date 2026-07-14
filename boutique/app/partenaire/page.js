@@ -80,8 +80,8 @@ export default function PartenairePage() {
       {/* Hero */}
       <div className="text-center px-5 pt-8 pb-7" style={{ background: `radial-gradient(120% 80% at 50% 0%,#2A2117 0%,${D.dark} 60%)`, color: D.dInk, borderBottom: `1px solid ${D.dLine}` }}>
         <div className="text-[11px] tracking-widest font-bold uppercase" style={{ color: D.dBrass }}>برنامج الشركاء · مدعوم من نجم كواف</div>
-        <h1 className="text-[30px] font-black leading-tight mt-3 mb-2.5 text-white">صار عندك <span style={{ color: D.dBrassSoft }}>سبونسور</span></h1>
-        <p className="text-[14.5px] max-w-[340px] mx-auto mb-5" style={{ color: D.dMuted }}>نجم كواف تكفّلك: شارك كودك، وكل زبون تجيبه يربّحك. حتى تموّل مشترياتك بنفسك.</p>
+        <h1 className="text-[28px] font-black leading-tight mt-3 mb-2.5 text-white">من اليوم ولا عندك <span style={{ color: D.dBrassSoft }}>سپونسور</span> !</h1>
+        <p className="text-[14.5px] max-w-[360px] mx-auto mb-5" style={{ color: D.dMuted }}>نجم كواف تتكفل، شارك الكود ديالك، وكل زبون تجيبه يربّحك. حتى تموّل مشترياتك بنفسك.</p>
         <button onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })}
           className="inline-block font-black text-[15.5px] rounded-2xl px-7 py-3.5" style={{ background: `linear-gradient(180deg,${D.dBrassSoft},${D.dBrass})`, color: "#20180a" }}>انضم الآن — مجاناً</button>
         {/* Ticker live */}
@@ -95,7 +95,7 @@ export default function PartenairePage() {
         {/* Steps */}
         <Section eyebrow="بسيط" title="كيفاش يخدم؟">
           <div className="flex flex-col gap-3">
-            <Step n="1" h="شارك كودك" p="عندك كود خاص بيك. أرسله لزبائنك على واتساب، انستغرام أو في الصالون." />
+            <Step n="1" h="شارك الكود ديالك" p="عندك كود خاص بيك. أرسله لزبائنك على واتساب، انستغرام أو في الصالون." />
             <Step n="2" h="زبونك يطلب" p="يطلب منتجاته بكودك — توصيل سريع ومنتج أصلي، تحت ضمانك." />
             <Step n="3" h="اربح رصيدك" p="تربح على كل طلبية، والرصيد يتضاف عند إستلام الطلب. تصرفه في مشترياتك." />
           </div>
@@ -121,6 +121,8 @@ export default function PartenairePage() {
             <Val ic="🔁" h="وكي يعاود يشري، تبقى تربح" p="حتى كي زبونك يعاود يشري، تربح عمولة أخرى — حتى لو شرى بلا الكود، رقم الهاتف ديالو يبقى متعلق بيك و تدّي عليه عمولة صغيرة." />
             <Val ic="📱" h="سوّق كيما تحب" p="شارك كودك على انستغرام، تيك توك و واتساب، فالغروپات و السطوريات، حتى فبايو صفحتك الإحترافية، مع الزبائن فصالونك و الزملاء ديالك فالخدمة. اصنع فيديوهات و ريلز و قدّم المنتجات بطريقتك الخاصة." />
             <Val ic="🛍️" h="موّل مشترياتك" p="رصيدك تستعملو كتخفيض على طلبياتك الخاصة، و دع أموال الحلاقة جانبًا." />
+            <Val ic="🤝" h="زبونك يرتاح" p="توصيل سريع، منتج أصلي، و كلش تحت ضمانك." />
+            <Val ic="🎁" h="مجاني تماماً" p="بلا اشتراك، بلا رأس مال. تنضم و تبدأ تربح." />
           </div>
         </Section>
 
