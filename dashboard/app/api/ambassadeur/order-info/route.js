@@ -21,6 +21,16 @@ const SCEN = {
   "depense_credit": "Crédit dépensé",
 };
 
+// Statut EN DIRECT dérivé de la commande (cohérent avec l'espace coiffeur)
+const noAccent = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+function statutFromOrder(o) {
+  const ship = String(o?.shipping_status || "").toLowerCase();
+  const dec  = noAccent(o?.decision_status);
+  if (/annul|retour/.test(ship) || /^annul/.test(dec)) return "annule";
+  if (/livr|encaiss|recouvert/.test(ship))             return "valide";
+  return "en_attente";
+}
+
 /**
  * GET /api/ambassadeur/order-info?order_id=...
  * Renvoie l'affiliation (coiffeur + commission) et le code promo d'une commande,
@@ -34,7 +44,7 @@ export async function GET(req) {
   const sb = adminSB();
   const { data: order } = await sb
     .from("nc_orders")
-    .select("ambassadeur_code, ambassadeur_phone, coupon_code, coupon_discount")
+    .select("ambassadeur_code, ambassadeur_phone, coupon_code, coupon_discount, shipping_status, decision_status")
     .eq("order_id", orderId)
     .maybeSingle();
 
@@ -56,7 +66,8 @@ export async function GET(req) {
       commissions:   (comms || []).map((c) => ({
         label:   SCEN[c.scenario] || c.scenario,
         montant: Number(c.montant_da) || 0,
-        statut:  c.statut,
+        // statut LIVE (dérivé de la commande) sauf pour une dépense (toujours actée)
+        statut:  Number(c.montant_da) < 0 ? "valide" : statutFromOrder(order),
       })),
     };
   }
