@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { generateOrderPrefix, buildOrderName, hashString, getClientIp } from "@/lib/utils";
 import { isValidAlgerianPhone, normalizePhone, calcCartTotal } from "@/lib/utils";
 import { LOG_TYPES, ORDER_SOURCES, EVENT_TYPES, MOVEMENT_TYPES } from "@/lib/constants";
-import { normPhone, computeMargin, resolveCode, resolveParrain, commissionFor } from "@/lib/ambassadeur";
+import { normPhone, computeMargin, resolveCode, resolveParrain, commissionFor, computeCagnotteLive } from "@/lib/ambassadeur";
 import { randomUUID } from "crypto";
 
 /**
@@ -150,10 +150,14 @@ export async function POST(request) {
   let spendAmb = null;
   if (spend_credit_code) {
     const amb = await resolveCode(sb, spend_credit_code);
-    if (amb && normPhone(amb.phone) === normPhone(phone) && Number(amb.cagnotte_da) > 0) {
-      const { marge } = await computeMargin(sb, items);
-      creditSpent = Math.max(0, Math.min(Number(amb.cagnotte_da), marge, cartTotal - couponDiscount));
-      if (creditSpent > 0) spendAmb = amb;
+    if (amb && normPhone(amb.phone) === normPhone(phone)) {
+      // Cagnotte DISPONIBLE calculée en direct (= commissions de commandes livrées)
+      const { dispo } = await computeCagnotteLive(sb, amb.phone);
+      if (dispo > 0) {
+        const { marge } = await computeMargin(sb, items);
+        creditSpent = Math.max(0, Math.min(dispo, marge, cartTotal - couponDiscount));
+        if (creditSpent > 0) spendAmb = amb;
+      }
     }
   }
 

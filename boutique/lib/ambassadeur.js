@@ -126,3 +126,54 @@ export function commissionFor(scenario, marge, { hasParrain = false } = {}) {
     taux_parrain: parrainPct,
   };
 }
+
+// ── Statut d'une commission dérivé EN DIRECT du statut de la commande ────────
+// C'est le statut de la commande qui décide si le coiffeur touche l'argent.
+const noAccent = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+export function statutFromOrder(order) {
+  const ship = String(order?.shipping_status || "").toLowerCase();
+  const dec  = noAccent(order?.decision_status);
+  if (/annul|retour/.test(ship) || /^annul/.test(dec)) return "annule";   // annulé / retourné
+  if (/livr|encaiss|recouvert/.test(ship))             return "valide";   // livré / encaissé → il touche
+  return "en_attente";                                                    // confirmé / en cours → pas encore
+}
+
+// ── Cagnotte calculée EN DIRECT (source de vérité = le statut des commandes) ─
+// Renvoie { dispo, attente, commissions:[{...,live_status}] } sans dépendre du cron.
+export async function computeCagnotteLive(sb, phone) {
+  const key = normPhone(phone);
+  const { data: comms } = await sb
+    .from("nc_ambassadeur_commissions")
+    .select("order_id, filleul_phone, scenario, montant_da, created_at")
+    .eq("ambassadeur_phone", key)
+    .order("created_at", { ascending: false });
+  const list = comms || [];
+
+  const orderIds = [...new Set(list.map((c) => c.order_id).filter(Boolean))];
+  const statusByOrder = {};
+  for (let i = 0; i < orderIds.length; i += 200) {
+    const chunk = orderIds.slice(i, i + 200);
+    const { data: orders } = await sb
+      .from("nc_orders")
+      .select("order_id, decision_status, shipping_status")
+      .in("order_id", chunk);
+    for (const o of orders || []) statusByOrder[o.order_id] = o;
+  }
+
+  let dispo = 0, attente = 0;
+  const commissions = list.map((c) => {
+    const o = statusByOrder[c.order_id];
+    const st = o ? statutFromOrder(o) : "en_attente";
+    const m = Number(c.montant_da) || 0;
+    if (m < 0) {
+      // Dépense de crédit : compte (réduit dispo) sauf si SA commande est annulée (remboursé)
+      if (st !== "annule") dispo += m;
+      return { ...c, live_status: st === "annule" ? "annule" : "valide" };
+    }
+    if (st === "valide")      dispo += m;
+    else if (st === "en_attente") attente += m;
+    return { ...c, live_status: st };
+  });
+
+  return { dispo: Math.max(0, Math.round(dispo)), attente: Math.round(attente), commissions };
+}

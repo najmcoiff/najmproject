@@ -28,25 +28,21 @@ export default function AmbassadeursOwnerPage() {
   async function setActif(phone, val) {
     setBusy(phone);
     try {
-      await fetch("/api/ambassadeur/manage", {
+      const r = await fetch("/api/ambassadeur/manage", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ phone, active: val }),
       });
+      const d = await r.json().catch(() => ({}));
+      if (val) {
+        setNotice(d.wa_sent
+          ? "✅ Activé — WhatsApp de bienvenue envoyé automatiquement depuis le numéro pro."
+          : "✅ Activé — l'envoi auto a échoué, utilise « Envoyer WhatsApp » (manuel).");
+        setTimeout(() => setNotice(""), 6000);
+      }
       await load();
     } catch {}
     finally { setBusy(""); }
-  }
-
-  // Activer + ouvrir WhatsApp avec le message pré-rempli (comme WhatsApp Web).
-  // 1 clic → le coiffeur est activé ET WhatsApp s'ouvre, message prêt à envoyer.
-  async function activateAndInvite(r) {
-    // Ouvrir la fenêtre AVANT l'await (sinon le navigateur bloque le popup)
-    const win = window.open(waLink(r), "_blank");
-    await setActif(r.phone, true);
-    setNotice("✅ Activé — WhatsApp s'est ouvert avec le message prêt. Il ne te reste qu'à envoyer.");
-    setTimeout(() => setNotice(""), 6000);
-    if (win) win.focus();
   }
 
   function waLink(row) {
@@ -66,7 +62,7 @@ export default function AmbassadeursOwnerPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-bold text-gray-900 mb-1">👑 Ambassadeurs coiffeurs</h1>
-      <p className="text-sm text-gray-500 mb-4">Clique « Activer + WhatsApp » : le coiffeur est activé <b>et</b> WhatsApp s'ouvre avec le message prêt à envoyer (aucun template Meta requis).</p>
+      <p className="text-sm text-gray-500 mb-4">Clique « Activer » : le coiffeur est activé <b>et</b> reçoit son WhatsApp de bienvenue automatiquement depuis le numéro pro. (« Envoyer WhatsApp » = renvoi manuel si besoin.)</p>
 
       {notice && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-xl px-4 py-3 mb-4">{notice}</div>
@@ -86,9 +82,9 @@ export default function AmbassadeursOwnerPage() {
                 <div className="font-semibold text-gray-900 text-sm">{r.full_name || "—"}</div>
                 <div className="text-xs text-gray-500 mt-0.5" dir="ltr">0{r.phone} · {r.salon || "—"}</div>
               </div>
-              <button onClick={() => activateAndInvite(r)} disabled={busy === r.phone}
+              <button onClick={() => setActif(r.phone, true)} disabled={busy === r.phone}
                 className="flex-none bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50">
-                {busy === r.phone ? "…" : "Activer + WhatsApp"}
+                {busy === r.phone ? "…" : "Activer"}
               </button>
             </div>
           ))}

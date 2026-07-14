@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase";
+import { computeCagnotteLive } from "@/lib/ambassadeur";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function GET(request, { params }) {
     // 1) L'ambassadeur (le lien = la clé)
     const { data: amb } = await sb
       .from("nc_ambassadeurs")
-      .select("code, phone, full_name, cagnotte_da, cagnotte_attente_da, total_filleuls, actif")
+      .select("code, phone, full_name, total_filleuls, actif")
       .ilike("code", clean)
       .maybeSingle();
 
@@ -49,15 +50,10 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Espace introuvable" }, { status: 404 });
     }
 
-    // 2) Historique des commissions (récent)
-    const { data: comms } = await sb
-      .from("nc_ambassadeur_commissions")
-      .select("order_id, filleul_phone, montant_da, statut, created_at")
-      .eq("ambassadeur_phone", amb.phone)
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    const list = comms || [];
+    // 2) Cagnotte + statuts calculés EN DIRECT depuis le statut réel des commandes
+    //    (source de vérité = la commande : livrée→validée, annulée→annulée).
+    const { dispo, attente, commissions } = await computeCagnotteLive(sb, amb.phone);
+    const list = commissions.slice(0, 30);
 
     // 3) Noms clients (pour initiales) via les commandes liées
     const orderIds = [...new Set(list.map((c) => c.order_id).filter(Boolean))];
@@ -80,14 +76,14 @@ export async function GET(request, { params }) {
       return t >= monthStart ? s + (Number(c.montant_da) || 0) : s;
     }, 0);
 
-    // 5) Historique formaté — nom complet OK (le garde-fou = le numéro masqué,
-    //    pas le nom : un nom sans numéro joignable n'est pas un contact exploitable).
+    // 5) Historique formaté — nom complet OK (le garde-fou = le numéro masqué).
+    //    statut = live_status (dérivé du statut réel de la commande, temps réel).
     const history = list.map((c) => ({
       client_name: nameByOrder[c.order_id] || "",
       initials:    initials(nameByOrder[c.order_id]),
       phone_masked: maskPhone(c.filleul_phone),
       montant_da: Number(c.montant_da) || 0,
-      statut:    c.statut === "valide" ? "valide" : c.statut === "annule" ? "annule" : "en_attente",
+      statut:    c.live_status || "en_attente",
       date:      c.created_at,
     }));
 
@@ -97,8 +93,8 @@ export async function GET(request, { params }) {
       code: amb.code,
       first_name: firstName,
       full_name: amb.full_name || "",
-      cagnotte_da: Number(amb.cagnotte_da) || 0,
-      cagnotte_attente_da: Number(amb.cagnotte_attente_da) || 0,
+      cagnotte_da: dispo,                 // disponible = commissions de commandes LIVRÉES
+      cagnotte_attente_da: attente,       // en attente = commandes pas encore livrées
       total_clients: amb.total_filleuls || 0,
       total_commandes: list.length,
       ce_mois_da: thisMonthDa,
