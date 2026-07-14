@@ -572,7 +572,7 @@ export default function CommanderPage() {
                 حذف
               </button>
             </div>
-          ) : (
+          ) : ambassadeurInfo ? null : (
             <div className="w-full rounded-2xl p-4 space-y-2" style={{ background: "#161616", border: "1px solid #2a2a2a" }}>
               <p className="text-sm font-semibold text-right" style={{ color: "#a0a0a0" }}>كود الشريك</p>
               <div className="flex gap-2" dir="ltr">

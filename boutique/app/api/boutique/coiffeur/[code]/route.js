@@ -52,7 +52,7 @@ export async function GET(request, { params }) {
 
     // 2) Cagnotte + statuts calculés EN DIRECT depuis le statut réel des commandes
     //    (source de vérité = la commande : livrée→validée, annulée→annulée).
-    const { dispo, attente, commissions } = await computeCagnotteLive(sb, amb.phone);
+    const { dispo, attente, total_gagne, total_depense, commissions } = await computeCagnotteLive(sb, amb.phone);
     const list = commissions.slice(0, 30);
 
     // 3) Noms clients (pour initiales) via les commandes liées
@@ -93,8 +93,10 @@ export async function GET(request, { params }) {
       code: amb.code,
       first_name: firstName,
       full_name: amb.full_name || "",
-      cagnotte_da: dispo,                 // disponible = commissions de commandes LIVRÉES
+      cagnotte_da: dispo,                 // disponible = utilisable maintenant (livré − dépensé)
       cagnotte_attente_da: attente,       // en attente = commandes pas encore livrées
+      total_gagne_da: total_gagne,        // gagné à vie (tout ce qui a été validé)
+      total_depense_da: total_depense,    // dépensé à vie (crédit utilisé)
       total_clients: amb.total_filleuls || 0,
       total_commandes: list.length,
       ce_mois_da: thisMonthDa,

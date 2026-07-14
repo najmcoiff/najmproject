@@ -160,20 +160,26 @@ export async function computeCagnotteLive(sb, phone) {
     for (const o of orders || []) statusByOrder[o.order_id] = o;
   }
 
-  let dispo = 0, attente = 0;
+  let dispo = 0, attente = 0, total_gagne = 0, total_depense = 0;
   const commissions = list.map((c) => {
     const o = statusByOrder[c.order_id];
     const st = o ? statutFromOrder(o) : "en_attente";
     const m = Number(c.montant_da) || 0;
     if (m < 0) {
       // Dépense de crédit : compte (réduit dispo) sauf si SA commande est annulée (remboursé)
-      if (st !== "annule") dispo += m;
+      if (st !== "annule") { dispo += m; total_depense += Math.abs(m); }
       return { ...c, live_status: st === "annule" ? "annule" : "valide" };
     }
-    if (st === "valide")      dispo += m;
+    if (st === "valide")      { dispo += m; total_gagne += m; }   // gagné à vie (validé)
     else if (st === "en_attente") attente += m;
     return { ...c, live_status: st };
   });
 
-  return { dispo: Math.max(0, Math.round(dispo)), attente: Math.round(attente), commissions };
+  return {
+    dispo: Math.max(0, Math.round(dispo)),
+    attente: Math.round(attente),
+    total_gagne: Math.round(total_gagne),      // tout ce qu'il a gagné (validé, à vie)
+    total_depense: Math.round(total_depense),  // tout ce qu'il a dépensé
+    commissions,
+  };
 }

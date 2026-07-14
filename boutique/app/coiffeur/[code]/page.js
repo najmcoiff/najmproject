@@ -106,7 +106,7 @@ export default function CoiffeurSpace() {
           <svg className="w-9 h-9" style={{ color: "#CBA45C" }} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>
         </div>
         <div className="mt-6">
-          <div className="text-xs font-semibold" style={{ color: "#A2937B" }}>رصيد أرباحك</div>
+          <div className="text-xs font-semibold" style={{ color: "#A2937B" }}>رصيدك المتاح للاستعمال</div>
           <div className="mt-1 text-[44px] leading-none font-extrabold text-white" style={{ fontVariantNumeric: "tabular-nums" }}>
             <span className="text-[19px] font-semibold align-middle ml-2" style={{ color: "#E3C88A" }}>دج</span>
             {fmt(display)}
@@ -115,6 +115,14 @@ export default function CoiffeurSpace() {
             <div className="mt-3 flex items-center gap-2 text-[13px]" style={{ color: "#A2937B" }}>
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#D8A24A", boxShadow: "0 0 0 3px rgba(216,162,74,.18)" }} />
               <span><b style={{ color: "#E3C88A" }}>+{fmt(data.cagnotte_attente_da)} دج</b> قيد الانتظار — تُضاف عند إستلام الطلب</span>
+            </div>
+          )}
+          {/* Récap à vie : gagné vs dépensé (n'apparaît que s'il a déjà utilisé du crédit) */}
+          {data.total_depense_da > 0 && (
+            <div className="mt-4 pt-3 flex items-center gap-4 text-[12px]" style={{ borderTop: "1px solid rgba(226,200,138,.14)", color: "#A2937B" }}>
+              <span>ربحت في المجموع <b style={{ color: "#E3C88A" }}>{fmt(data.total_gagne_da)} دج</b></span>
+              <span style={{ opacity: .4 }}>·</span>
+              <span>استعملت منها <b className="text-white">{fmt(data.total_depense_da)} دج</b></span>
             </div>
           )}
         </div>

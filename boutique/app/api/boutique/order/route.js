@@ -491,6 +491,7 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
     let earner = null;       // { code, phone } de celui qui touche
     let scenario = null;
     let isNewLien = false;
+    let switchLien = false;  // « dernier code gagne » : le client bascule vers un nouveau coiffeur
 
     const existingLien = await resolveParrain(sb, phone);
 
@@ -501,7 +502,12 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
       if (normPhone(amb.phone) === phone) return;    // auto-parrainage interdit
       earner   = { code: amb.code, phone: normPhone(amb.phone) };
       scenario = "2_vente_directe";
-      if (!existingLien) isNewLien = true;
+      if (!existingLien) {
+        isNewLien = true;
+      } else if (normPhone(existingLien.ambassadeur_phone) !== earner.phone) {
+        // Le client était attribué à un AUTRE coiffeur → « dernier code gagne » : il bascule.
+        switchLien = true;
+      }
     } else if (existingLien) {
       // Scénario 3 — rachat sans code, numéro déjà attribué à un parrain
       earner   = { code: existingLien.ambassadeur_code, phone: normPhone(existingLien.ambassadeur_phone) };
@@ -525,6 +531,29 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
       if (a) {
         await sb.from("nc_ambassadeurs")
           .update({ total_filleuls: (a.total_filleuls || 0) + 1, updated_at: new Date().toISOString() })
+          .eq("phone", earner.phone);
+      }
+    } else if (switchLien) {
+      // « Dernier code gagne » : réattribuer le client au coiffeur dont le code vient d'être utilisé.
+      // Y touche la vente de cette commande ET la rente future (scénario 3) ; X perd le client.
+      const oldPhone = normPhone(existingLien.ambassadeur_phone);
+      await sb.from("nc_ambassadeur_liens").update({
+        ambassadeur_code:  earner.code,
+        ambassadeur_phone: earner.phone,
+      }).eq("filleul_phone", phone);
+      // Transférer le compteur clients : -1 à l'ancien coiffeur, +1 au nouveau.
+      const { data: oldA } = await sb.from("nc_ambassadeurs")
+        .select("total_filleuls").eq("phone", oldPhone).maybeSingle();
+      if (oldA) {
+        await sb.from("nc_ambassadeurs")
+          .update({ total_filleuls: Math.max(0, (oldA.total_filleuls || 0) - 1), updated_at: new Date().toISOString() })
+          .eq("phone", oldPhone);
+      }
+      const { data: newA } = await sb.from("nc_ambassadeurs")
+        .select("total_filleuls").eq("phone", earner.phone).maybeSingle();
+      if (newA) {
+        await sb.from("nc_ambassadeurs")
+          .update({ total_filleuls: (newA.total_filleuls || 0) + 1, updated_at: new Date().toISOString() })
           .eq("phone", earner.phone);
       }
     }
