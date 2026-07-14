@@ -728,6 +728,8 @@ export default function ConfirmationPage() {
             <div className="flex-1 overflow-y-auto">
             <div className="max-w-2xl mx-auto p-4 space-y-4">
 
+              <AffiliationTicket orderId={detail.order_id} />
+
               {/* En-tête commande */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -1711,6 +1713,49 @@ function DeleteOrderModal({ order, loading, onClose, onConfirm }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Ticket affiliation + code promo (détail commande) ────────────────────────
+function AffiliationTicket({ orderId }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    if (!orderId) { setInfo(null); return; }
+    const token = getSession()?.token || "";
+    fetch(`/api/ambassadeur/order-info?order_id=${orderId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json()).then(setInfo).catch(() => setInfo(null));
+  }, [orderId]);
+
+  if (!info || (!info.affiliation && !info.coupon)) return null;
+  const fmt = (n) => (Number(n) || 0).toLocaleString("fr-DZ");
+  const badge = (s) => s === "valide"
+    ? "bg-green-100 text-green-700" : s === "annule"
+    ? "bg-gray-100 text-gray-400" : "bg-yellow-100 text-yellow-700";
+  const badgeLbl = (s) => s === "valide" ? "validé" : s === "annule" ? "annulé" : "en attente";
+
+  return (
+    <div className="bg-white rounded-xl border p-4" style={{ borderColor: "#E4DAC6" }}>
+      <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: "#9C7A34" }}>🎟️ Affiliation & code promo</div>
+      {info.coupon && (
+        <div className="text-sm mb-2">
+          <span className="text-gray-500">Code promo : </span>
+          <span className="font-mono font-bold">{info.coupon.code}</span>
+          {info.coupon.discount > 0 && <span className="text-green-700"> · −{fmt(info.coupon.discount)} DA</span>}
+        </div>
+      )}
+      {info.affiliation && (
+        <div className="text-sm">
+          <div><span className="text-gray-500">Ramené par : </span><b>{info.affiliation.coiffeur_name}</b> <span className="font-mono text-xs text-gray-400">({info.affiliation.code})</span></div>
+          {info.affiliation.commissions.map((c, i) => (
+            <div key={i} className="text-xs mt-1.5 flex items-center gap-2">
+              <span className="text-gray-500">{c.label} :</span>
+              <b>{c.montant >= 0 ? "+" : ""}{fmt(c.montant)} DA</b>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badge(c.statut)}`}>{badgeLbl(c.statut)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
