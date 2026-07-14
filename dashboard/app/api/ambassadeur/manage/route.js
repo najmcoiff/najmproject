@@ -68,6 +68,18 @@ async function sendWelcomeWati(phone9, code, fullName) {
   }
 }
 
+// DELETE /api/ambassadeur/manage?phone=... → supprime l'ambassadeur + ses liens + commissions
+export async function DELETE(req) {
+  if (!ownerGuard(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const phone = String(new URL(req.url).searchParams.get("phone") || "").replace(/\D/g, "").slice(-9);
+  if (phone.length < 9) return NextResponse.json({ error: "phone requis" }, { status: 400 });
+  const sb = adminSB();
+  await sb.from("nc_ambassadeur_commissions").delete().eq("ambassadeur_phone", phone);
+  await sb.from("nc_ambassadeur_liens").delete().eq("ambassadeur_phone", phone);
+  await sb.from("nc_ambassadeurs").delete().eq("phone", phone);
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req) {
   if (!ownerGuard(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   const body = await req.json().catch(() => ({}));

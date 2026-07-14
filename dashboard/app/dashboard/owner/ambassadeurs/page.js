@@ -45,6 +45,18 @@ export default function AmbassadeursOwnerPage() {
     finally { setBusy(""); }
   }
 
+  async function del(r) {
+    if (!window.confirm(`Supprimer "${r.full_name || r.code}" ? Ses commissions et liens seront effacés définitivement.`)) return;
+    setBusy(r.phone);
+    try {
+      await fetch(`/api/ambassadeur/manage?phone=${r.phone}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      await load();
+    } catch {}
+    finally { setBusy(""); }
+  }
+
   function waLink(row) {
     const phone = String(row.phone || "").replace(/\D/g, "").slice(-9);
     const first = (row.full_name || "").trim().split(/\s+/)[0] || "";
@@ -82,10 +94,13 @@ export default function AmbassadeursOwnerPage() {
                 <div className="font-semibold text-gray-900 text-sm">{r.full_name || "—"}</div>
                 <div className="text-xs text-gray-500 mt-0.5" dir="ltr">0{r.phone} · {r.salon || "—"}</div>
               </div>
-              <button onClick={() => setActif(r.phone, true)} disabled={busy === r.phone}
-                className="flex-none bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50">
-                {busy === r.phone ? "…" : "Activer"}
-              </button>
+              <div className="flex-none flex items-center gap-2">
+                <button onClick={() => setActif(r.phone, true)} disabled={busy === r.phone}
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50">
+                  {busy === r.phone ? "…" : "Activer"}
+                </button>
+                <button onClick={() => del(r)} title="Supprimer" className="text-gray-300 hover:text-red-600 text-lg leading-none px-1">🗑️</button>
+              </div>
             </div>
           ))}
         </div>
@@ -117,8 +132,12 @@ export default function AmbassadeursOwnerPage() {
                   Envoyer WhatsApp
                 </a>
                 <button onClick={() => setActif(r.phone, false)} disabled={busy === r.phone}
-                  className="flex-none border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-300 text-sm rounded-lg px-3 py-2">
+                  className="flex-none border border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300 text-sm rounded-lg px-3 py-2">
                   Désactiver
+                </button>
+                <button onClick={() => del(r)} title="Supprimer" disabled={busy === r.phone}
+                  className="flex-none border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-300 text-sm rounded-lg px-3 py-2">
+                  🗑️
                 </button>
               </div>
             </div>
