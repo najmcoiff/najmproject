@@ -36,18 +36,31 @@ export async function GET() {
         .in("phone", phones);
       for (const a of ambs || []) {
         infoByPhone[a.phone] = {
-          first_name: (a.full_name || "").trim().split(/\s+/)[0] || "كوافور",
+          first_name: (a.full_name || "").trim().split(/\s+/)[0] || "حلاق",
           wilaya: a.wilaya || "",
         };
       }
     }
 
+    // Temps relatif en darija (قبل X دقيقة/ساعة/يوم)
+    const relTime = (iso) => {
+      const t = iso ? new Date(iso).getTime() : 0;
+      if (!t) return "قبل قليل";
+      const mins = Math.max(1, Math.floor((Date.now() - t) / 60000));
+      if (mins < 60)   return mins === 1 ? "قبل دقيقة" : `قبل ${mins} دقيقة`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24)    return hrs === 1 ? "قبل ساعة" : `قبل ${hrs} ساعة`;
+      const days = Math.floor(hrs / 24);
+      return days === 1 ? "قبل يوم" : `قبل ${days} أيام`;
+    };
+
     const recent = (comms || []).map((c) => {
       const info = infoByPhone[c.ambassadeur_phone] || {};
       return {
-        first_name: info.first_name || "كوافور",
+        first_name: info.first_name || "حلاق",
         wilaya: info.wilaya || "",
         montant_da: Number(c.montant_da) || 0,
+        ago: relTime(c.created_at),
       };
     });
 

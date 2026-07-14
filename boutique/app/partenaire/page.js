@@ -22,8 +22,8 @@ export default function PartenairePage() {
 
   // Ticker live (vraies données si dispo, sinon échantillon générique)
   const ticker = stats.recent.length
-    ? stats.recent.map((r) => `كوافور${r.wilaya ? " من " + r.wilaya : ""} ربح ${fmt(r.montant_da)} دج`)
-    : ["كوافور ربح 675 دج قبل قليل", "كوافور ربح 540 دج قبل قليل", "كوافور ربح 810 دج قبل قليل"];
+    ? stats.recent.map((r) => `🌟 حلاق${r.wilaya ? " من " + r.wilaya : ""} ربح ${fmt(r.montant_da)} دج · ${r.ago || "قبل قليل"}`)
+    : ["🌟 حلاق من الجزائر ربح 675 دج · قبل 3 دقائق", "🌟 حلاق من وهران ربح 540 دج · قبل 12 دقيقة", "🌟 حلاق من قسنطينة ربح 810 دج · قبل ساعة"];
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2600);
     return () => clearInterval(id);
@@ -97,25 +97,30 @@ export default function PartenairePage() {
           <div className="flex flex-col gap-3">
             <Step n="1" h="شارك كودك" p="عندك كود خاص بيك. أرسله لزبائنك على واتساب، انستغرام أو في الصالون." />
             <Step n="2" h="زبونك يطلب" p="يطلب منتجاته بكودك — توصيل سريع ومنتج أصلي، تحت ضمانك." />
-            <Step n="3" h="اربح رصيدك" p="تربح على كل طلبية، والرصيد يتضاف عند التسليم. تصرفه في مشترياتك." />
+            <Step n="3" h="اربح رصيدك" p="تربح على كل طلبية، والرصيد يتضاف عند إستلام الطلب. تصرفه في مشترياتك." />
           </div>
         </Section>
 
         {/* Sponsor banner */}
-        <div className="mt-6 rounded-[20px] text-center px-5 py-6" style={{ background: `linear-gradient(180deg,#211A13,${D.dark})`, color: D.dInk, border: `1px solid ${D.dLine}` }}>
-          <div className="text-[20px] font-black text-white mb-1.5">ماشي تخفيض. <span style={{ color: D.dBrassSoft }}>سبونسور</span>.</div>
-          <p className="text-[13px] max-w-[320px] mx-auto" style={{ color: D.dMuted }}>نجم كواف تقف معاك: كل ما تخدم أكثر تربح أكثر — ورصيدك يبقى يطلع.</p>
+        <div className="mt-6 rounded-[20px] px-5 py-6 text-right" style={{ background: `linear-gradient(180deg,#211A13,${D.dark})`, color: D.dInk, border: `1px solid ${D.dLine}` }}>
+          <p className="text-[15px] font-black text-white mb-3 leading-relaxed">
+            نجم كواف هي <span style={{ color: D.dBrassSoft }}>السپونسور</span> ديالك، و هيا لي تدعمك فالمسيرة الإحترافية ديالك.
+          </p>
+          <p className="text-[13px] mb-3 leading-relaxed" style={{ color: D.dInk }}>
+            ماعليك غير تسوّق لنفسك و لخدمتك و تبني ثقة مع الزبائن ديالك، و راح يزيد دخلك تدريجيا أثناء صعودك للقمة. 🌟
+          </p>
+          <p className="text-[12px] leading-relaxed" style={{ color: D.dMuted }}>
+            هاذا النظام مقتبس من الماركات العالمية اللي تقدّم عقود شراكة لليوتوبرز و صانعي المحتوى و المحترفين فالمجال. أي حلاق قادر يبني قاعدة جماهيرية، قادر يزيد دخلو فمجالو. و نأمل أن هاذا النظام يقدّم إضافة لمجال الحلاقة الرجالية في الجزائر و يرفعها لمستوى الدول المتقدمة فالمجال.
+          </p>
         </div>
 
         {/* Values */}
         <Section eyebrow="مزايا" title="علاش تنضم؟">
-          <div className="grid grid-cols-2 gap-2.5">
-            <Val ic="💰" h="اربح على كل طلبية" p="كل زبون تجيبه يزيد رصيدك، وكل ما جبت أكثر ربحت أكثر." />
-            <Val ic="🔁" h="وكي يعاود، تبقى تربح" p="حتى كي زبونك يعاود يشري، ترجعلك حصة." />
-            <Val ic="📱" h="سوّق من السوشيال" p="شارك كودك على انستغرام، تيك توك وواتساب." />
-            <Val ic="🛍️" h="موّل مشترياتك" p="رصيدك تستعمله كتخفيض على طلبياتك الخاصة." />
-            <Val ic="🤝" h="زبونك يرتاح" p="توصيل سريع، منتج أصلي، وكلش تحت ضمانك." />
-            <Val ic="🎁" h="مجاني تماماً" p="بلا اشتراك، بلا رأس مال. تنضم وتبدأ تربح." />
+          <div className="grid grid-cols-1 gap-2.5">
+            <Val ic="💰" h="اربح على كل طلبية" p="كل زبون تجيبه يشري من الموقع، تربح عليه عمولة تتضاف لرصيدك." />
+            <Val ic="🔁" h="وكي يعاود يشري، تبقى تربح" p="حتى كي زبونك يعاود يشري، تربح عمولة أخرى — حتى لو شرى بلا الكود، رقم الهاتف ديالو يبقى متعلق بيك و تدّي عليه عمولة صغيرة." />
+            <Val ic="📱" h="سوّق كيما تحب" p="شارك كودك على انستغرام، تيك توك و واتساب، فالغروپات و السطوريات، حتى فبايو صفحتك الإحترافية، مع الزبائن فصالونك و الزملاء ديالك فالخدمة. اصنع فيديوهات و ريلز و قدّم المنتجات بطريقتك الخاصة." />
+            <Val ic="🛍️" h="موّل مشترياتك" p="رصيدك تستعملو كتخفيض على طلبياتك الخاصة، و دع أموال الحلاقة جانبًا." />
           </div>
         </Section>
 
@@ -129,12 +134,12 @@ export default function PartenairePage() {
           ) : (
             <>
               <div className="text-[40px] font-black" style={{ color: D.dBrassSoft }}>+{fmt(count)}</div>
-              <div className="text-[13px] mt-0.5" style={{ color: D.dMuted }}>كوافور شريك يربحون معنا</div>
+              <div className="text-[13px] mt-0.5" style={{ color: D.dMuted }}>حلاق شريك يربحون معنا</div>
             </>
           )}
           <div className="flex flex-col gap-2.5 mt-5 text-right">
-            <Quote t="خويا، التوبيك عندو كوميسيون مليحة. اليوم بعت لزبون وربحت 810 دج — بلا ما نخسر حتى حاجة." who="كريم · كوافور" />
-            <Quote t="زبائني كانوا يشرو من برا، دروك يشرو بكودي وأنا نربح. رصيدي يطلع بوحدو." who="سفيان · كوافور" />
+            <Quote t="خويا، التوبيك عندو كوميسيون مليحة. اليوم بعت لزبون وربحت 810 دج — بلا ما نخسر حتى حاجة." who="كريم · حلاق" />
+            <Quote t="زبائني كانوا يشرو من برا، دروك يشرو بكودي وأنا نربح. رصيدي يطلع بوحدو." who="سفيان · حلاق" />
           </div>
         </div>
 

@@ -74,7 +74,7 @@ export default function CoiffeurSpace() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold">{data.full_name || "شريك نجم كواف"}</div>
-            <div className="text-xs mt-1" style={{ color: "#A2937B" }}>كوافور · شريك</div>
+            <div className="text-xs mt-1" style={{ color: "#A2937B" }}>حلاق · شريك</div>
           </div>
           <svg className="w-9 h-9" style={{ color: "#CBA45C" }} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>
         </div>
@@ -87,7 +87,7 @@ export default function CoiffeurSpace() {
           {data.cagnotte_attente_da > 0 && (
             <div className="mt-3 flex items-center gap-2 text-[13px]" style={{ color: "#A2937B" }}>
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#D8A24A", boxShadow: "0 0 0 3px rgba(216,162,74,.18)" }} />
-              <span><b style={{ color: "#E3C88A" }}>+{fmt(data.cagnotte_attente_da)} دج</b> قيد الانتظار — تُضاف عند التسليم</span>
+              <span><b style={{ color: "#E3C88A" }}>+{fmt(data.cagnotte_attente_da)} دج</b> قيد الانتظار — تُضاف عند إستلام الطلب</span>
             </div>
           )}
         </div>

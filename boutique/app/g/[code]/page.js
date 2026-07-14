@@ -54,7 +54,7 @@ export default function GarantiePage() {
         <Perk icon="🚚" title="توصيل سريع" desc="طلبك يوصلك بأسرع وقت، لكل الولايات." />
         <Perk icon="✅" title="منتجات أصلية 100%" desc="كل المنتجات أصلية ومضمونة." />
         {state.valid && state.first_name && (
-          <Perk icon="🤝" title={`تحت ضمان ${state.first_name}`} desc="كوافورك يضمن لك الطلبية — أي مشكل، هو معاك." />
+          <Perk icon="🤝" title={`تحت ضمان ${state.first_name}`} desc="حلاقك يضمن لك الطلبية — أي مشكل، هو معاك." />
         )}
       </section>
 

@@ -5,12 +5,28 @@ import { normPhone } from "@/lib/ambassadeur";
 
 export const dynamic = "force-dynamic";
 
-// Code lisible sans ambiguïté (pas de 0/O/1/I)
-const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function randomCode() {
-  let s = "";
-  for (let i = 0; i < 5; i++) s += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-  return "NC" + s;
+// Translittération arabe → latin (basique) pour un code lisible et humain.
+const AR2LAT = {
+  "ا":"a","أ":"a","إ":"i","آ":"a","ب":"b","ت":"t","ث":"th","ج":"j","ح":"h","خ":"kh",
+  "د":"d","ذ":"d","ر":"r","ز":"z","س":"s","ش":"ch","ص":"s","ض":"d","ط":"t","ظ":"z",
+  "ع":"a","غ":"gh","ف":"f","ق":"q","ك":"k","ل":"l","م":"m","ن":"n","ه":"h","و":"w",
+  "ي":"y","ى":"a","ة":"a","ء":"","ئ":"y","ؤ":"w","پ":"p","گ":"g","ڤ":"v","چ":"ch",
+};
+function slugify(name) {
+  const first = String(name || "").trim().split(/\s+/)[0] || "";
+  let out = "";
+  for (const ch of first) {
+    if (AR2LAT[ch] != null) out += AR2LAT[ch];
+    else if (/[a-zA-Z]/.test(ch)) out += ch.toLowerCase();
+  }
+  out = out.replace(/[^a-z]/g, "");
+  return out.slice(0, 12);
+}
+// Code = prénom (minuscule) + chiffre, ex. "karim7". Fallback "nc" + chiffres.
+function makeCode(name) {
+  const base = slugify(name) || "nc";
+  const num = Math.floor(Math.random() * 90) + 10; // 2 chiffres
+  return base + num;
 }
 
 /**
@@ -48,12 +64,12 @@ export async function POST(request) {
       });
     }
 
-    // Générer un code unique
-    let code = randomCode();
-    for (let i = 0; i < 6; i++) {
-      const { data: clash } = await sb.from("nc_ambassadeurs").select("id").eq("code", code).maybeSingle();
+    // Générer un code unique basé sur le prénom (ex. karim7)
+    let code = makeCode(full_name);
+    for (let i = 0; i < 8; i++) {
+      const { data: clash } = await sb.from("nc_ambassadeurs").select("id").ilike("code", code).maybeSingle();
       if (!clash) break;
-      code = randomCode();
+      code = makeCode(full_name);
     }
 
     const { error: insErr } = await sb.from("nc_ambassadeurs").insert({
