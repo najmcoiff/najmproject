@@ -11,6 +11,10 @@ export default function CoiffeurSpace() {
   const [loading, setLoading] = useState(true);
   const [display, setDisplay] = useState(0);
   const [copied, setCopied]   = useState(false);
+  const [myAvis, setMyAvis]   = useState(null);   // {body, statut}
+  const [avisText, setAvisText] = useState("");
+  const [avisMsg, setAvisMsg] = useState("");
+  const [avisBusy, setAvisBusy] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -50,6 +54,29 @@ export default function CoiffeurSpace() {
     if (navigator.clipboard) navigator.clipboard.writeText(data?.code || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
+  }
+
+  useEffect(() => {
+    if (!code) return;
+    fetch(`/api/boutique/coiffeur/avis?code=${encodeURIComponent(code)}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.avis) { setMyAvis(d.avis); setAvisText(d.avis.body || ""); } })
+      .catch(() => {});
+  }, [code]);
+
+  async function submitAvis() {
+    if (!avisText.trim() || !data) return;
+    setAvisBusy(true); setAvisMsg("");
+    try {
+      const r = await fetch("/api/boutique/coiffeur/avis", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: data.code, body: avisText.trim() }),
+      });
+      const d = await r.json();
+      if (d.ok) { setMyAvis({ body: avisText.trim(), statut: "pending" }); setAvisMsg("تم إرسال رأيك، سيظهر بعد المراجعة ✅"); }
+      else setAvisMsg(d.error || "خطأ");
+    } catch { setAvisMsg("خطأ في الاتصال"); }
+    finally { setAvisBusy(false); }
   }
 
   if (loading) {
@@ -161,6 +188,33 @@ export default function CoiffeurSpace() {
           </section>
         </>
       )}
+
+      {/* Avis du coiffeur */}
+      <section className="rounded-2xl bg-white border border-gray-200 p-4">
+        <div className="text-[13px] font-bold mb-1">رأيك يهمنا 💬</div>
+        <p className="text-[11.5px] text-gray-500 mb-2.5">شارك تجربتك — بعد المراجعة، رأيك يظهر للحلاقين الآخرين.</p>
+        {myAvis && myAvis.statut === "approved" ? (
+          <div className="rounded-xl p-3 text-[13px]" style={{ background: "rgba(63,122,86,.1)", border: "1px solid rgba(63,122,86,.3)" }}>
+            <div style={{ color: "#3F7A56" }} className="font-bold text-xs mb-1">رأيك منشور ✅</div>
+            «{myAvis.body}»
+          </div>
+        ) : (
+          <>
+            <textarea value={avisText} onChange={(e) => setAvisText(e.target.value.slice(0, 500))} rows={3}
+              placeholder="اكتب رأيك هنا..." dir="rtl"
+              className="w-full rounded-xl border border-gray-200 p-3 text-[13px] focus:outline-none" style={{ background: "#FBF8F1" }} />
+            {myAvis && myAvis.statut === "pending" && (
+              <p className="text-[11.5px] mt-1.5" style={{ color: "#A9761F" }}>رأيك قيد المراجعة ⏳</p>
+            )}
+            {avisMsg && <p className="text-[11.5px] mt-1.5" style={{ color: "#3F7A56" }}>{avisMsg}</p>}
+            <button onClick={submitAvis} disabled={avisBusy || !avisText.trim()}
+              className="mt-2 w-full rounded-xl py-2.5 font-bold text-[13.5px] text-[#20180a] disabled:opacity-50"
+              style={{ background: "linear-gradient(180deg,#E3C88A,#CBA45C)" }}>
+              {avisBusy ? "..." : "أرسل رأيك"}
+            </button>
+          </>
+        )}
+      </section>
 
       <p className="text-center text-[12px] text-gray-500 pt-1 leading-relaxed">كل زبون تجيبه يزيد رصيدك.<br /><b style={{ color: "#9C7A34" }}>كل ما جبت أكثر، ربحت أكثر.</b></p>
     </Shell>

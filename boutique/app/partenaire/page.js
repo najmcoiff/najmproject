@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 const D = { dark: "#17130F", dInk: "#EDE4D3", dMuted: "#A2937B", dLine: "#3A3125", dBrass: "#CBA45C", dBrassSoft: "#E3C88A" };
 
 export default function PartenairePage() {
-  const [stats, setStats] = useState({ partner_count: 0, recent: [] });
+  const [stats, setStats] = useState({ partner_count: 0, recent: [], testimonials: [] });
   const [form, setForm] = useState({ full_name: "", phone: "", salon: "" });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);      // 'pending' | 'active' | error string
@@ -139,10 +139,13 @@ export default function PartenairePage() {
               <div className="text-[13px] mt-0.5" style={{ color: D.dMuted }}>حلاق شريك يربحون معنا</div>
             </>
           )}
-          <div className="flex flex-col gap-2.5 mt-5 text-right">
-            <Quote t="خويا، التوبيك عندو كوميسيون مليحة. اليوم بعت لزبون وربحت 810 دج — بلا ما نخسر حتى حاجة." who="كريم · حلاق" />
-            <Quote t="زبائني كانوا يشرو من برا، دروك يشرو بكودي وأنا نربح. رصيدي يطلع بوحدو." who="سفيان · حلاق" />
-          </div>
+          {stats.testimonials && stats.testimonials.length > 0 && (
+            <div className="flex flex-col gap-2.5 mt-5 text-right">
+              {stats.testimonials.map((q, i) => (
+                <Quote key={i} t={q.body} who={`${q.name}${q.city ? " · " + q.city : ""} · حلاق`} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Form */}

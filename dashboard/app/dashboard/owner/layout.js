@@ -16,6 +16,7 @@ const OWNER_NAV = [
   { href: "/dashboard/owner/marketing",    label: "War Room 🎯",        icon: "🎯" },
   { href: "/dashboard/owner/retargeting",  label: "Retargeting",       icon: "🎯" },
   { href: "/dashboard/owner/ambassadeurs", label: "Ambassadeurs",      icon: "👑" },
+  { href: "/dashboard/owner/avis",         label: "Commentaires",      icon: "💬" },
   { href: "/dashboard/utilisateurs",       label: "Utilisateurs",      icon: "👥" },
   { href: "/dashboard",                    label: "← Dashboard agents", icon: "◀" },
 ];

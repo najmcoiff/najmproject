@@ -64,8 +64,22 @@ export async function GET() {
       };
     });
 
+    // Avis approuvés (témoignages) pour la landing
+    const { data: avisRows } = await sb
+      .from("nc_ambassadeur_avis")
+      .select("author_name, author_city, body")
+      .eq("statut", "approved")
+      .order("created_at", { ascending: false })
+      .limit(8);
+    const testimonials = (avisRows || []).map((a) => ({
+      name: a.author_name || "حلاق",
+      city: a.author_city || "",
+      body: a.body || "",
+    }));
+
     return NextResponse.json({
       partner_count: count || 0,
+      testimonials,
       recent,
     });
   } catch (err) {
