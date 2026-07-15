@@ -15,6 +15,27 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req) { return POST(req); }
 
+// Notif WhatsApp « مبروك، X ولات في رصيدك » quand la commission est validée (livraison).
+// Template WATI « nc_commission_valide » (Utility). Best-effort.
+// {{name}} prénom · {{amount}} montant DA · {{ref}} code (URL du bouton).
+async function notifyCommissionValide(phone9, firstName, montant, code) {
+  const url = (process.env.WATI_API_URL || "").replace(/\/$/, "");
+  const token = process.env.WATI_API_TOKEN;
+  if (!url || !token || !phone9 || !(montant > 0)) return;
+  const params = [
+    { name: "name",   value: firstName || "" },
+    { name: "amount", value: String(montant) },
+    { name: "ref",    value: code || "" },
+  ];
+  try {
+    await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ template_name: "nc_commission_valide", broadcast_name: `amb_valide_${Date.now()}`, parameters: params }),
+    });
+  } catch { /* silencieux */ }
+}
+
 const isDelivered = (s) => /livr|encaiss|recouvert/i.test(s || "") && !/annul|retour/i.test(s || "");
 const isCancelled = (ship, dec) =>
   /annul|retour/i.test(ship || "") || /^annul/i.test((dec || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim());
@@ -67,6 +88,20 @@ export async function POST(req) {
       if (isDelivered(o.shipping_status)) {
         await sb.rpc("valider_commission", { p_commission_id: c.id });
         validated++;
+        // Notif « ولات في رصيدك » — seulement pour un gain positif (pas une dépense de crédit)
+        if (Number(c.montant_da) > 0) {
+          const { data: amb } = await sb
+            .from("nc_ambassadeurs")
+            .select("full_name, code")
+            .eq("phone", c.ambassadeur_phone)
+            .maybeSingle();
+          await notifyCommissionValide(
+            c.ambassadeur_phone,
+            (amb?.full_name || "").trim().split(/\s+/)[0] || "",
+            Number(c.montant_da),
+            amb?.code,
+          );
+        }
       } else if (isCancelled(o.shipping_status, o.decision_status)) {
         // Annuler : retirer de la cagnotte en attente
         const { error: upErr } = await sb
