@@ -92,12 +92,24 @@ export default function PartenairePage() {
       </div>
 
       <div className="max-w-[460px] mx-auto px-4">
-        {/* Steps */}
-        <Section eyebrow="بسيط" title="كيفاش يخدم؟">
-          <div className="flex flex-col gap-3">
-            <Step n="1" h="شارك الكود ديالك" p="عندك كود خاص بيك. أرسله لزبائنك على واتساب، انستغرام أو في الصالون." />
-            <Step n="2" h="زبونك يطلب" p="يطلب منتجاته بكودك — توصيل سريع ومنتج أصلي، تحت ضمانك." />
-            <Step n="3" h="اربح رصيدك" p="تربح على كل طلبية، والرصيد يتضاف عند إستلام الطلب. تصرفه في مشترياتك." />
+        {/* Schéma parcours — tout est expliqué, aucun coiffeur ne doit demander */}
+        <Section eyebrow="بكل بساطة · خطوة بخطوة" title="كيفاش تربح؟">
+          <div className="flex flex-col">
+            <FlowNode e="🔑" h="عندك كود خاص بيك" p="مجاني، بلا اشتراك و بلا رأس مال." />
+            <FlowArrow />
+            <FlowNode e="📲" h="شاركو مع زبائنك و زملائك" p="واتساب، انستغرام، ولا مباشرة في الصالون." />
+            <FlowArrow />
+            <FlowNode e="🛒" h="الزبون يطلب بكودك" p="توصيل سريع + منتج أصلي، تحت ضمانك. الزبون ما يخلّص والو زيادة." />
+            <FlowArrow />
+            <FlowNode e="💰" h="تربح عمولة على كل طلبية" p="تتضاف لرصيدك عند إستلام الطلب." gold />
+            <FlowArrow />
+            <FlowNode e="🔁" h="يعاود يشري؟ تبقى تربح" p="حتى بلا كود، رقم زبونك يبقى متعلّق بيك و تربح عليه." gold />
+            <FlowArrow />
+            <FlowNode e="🛍️" h="استعمل رصيدك في مشترياتك" p="خصم على طلبياتك الخاصة عند نجم كواف. دِير فلوس الحلاقة جانبًا." />
+          </div>
+          <div className="mt-4 rounded-2xl text-center py-3.5 px-4 font-black text-[15px]"
+            style={{ background: "linear-gradient(180deg,#211A13,#17130F)", color: "#E3C88A", border: "1px solid #3A3125" }}>
+            🎁 الانضمام مجاني 100% — تنضم و تبدأ تربح من أول طلبية.
           </div>
         </Section>
 
@@ -201,6 +213,31 @@ function Step({ n, h, p }) {
     <div className="flex gap-3.5 items-start rounded-2xl p-4" style={{ background: "#FBF8F1", border: "1px solid #E4DAC6" }}>
       <div className="flex-none w-[34px] h-[34px] rounded-[10px] grid place-items-center font-black" style={{ background: "rgba(156,122,52,.14)", color: "#9C7A34" }}>{n}</div>
       <div><h3 className="text-[15px] font-extrabold">{h}</h3><p className="text-[13px]" style={{ color: "#7A6E58" }}>{p}</p></div>
+    </div>
+  );
+}
+// Nœud du schéma parcours : emoji + titre clair + détail (répond d'avance à la question).
+function FlowNode({ e, h, p, gold }) {
+  return (
+    <div className="flex items-center gap-3.5 rounded-2xl p-4"
+      style={{
+        background: gold ? "linear-gradient(180deg,#FBF3DF,#F6EAC9)" : "#FBF8F1",
+        border: gold ? "1px solid #E4C98A" : "1px solid #E4DAC6",
+      }}>
+      <div className="flex-none w-12 h-12 rounded-full grid place-items-center text-[26px]"
+        style={{ background: gold ? "rgba(156,122,52,.16)" : "#F3EEE3" }}>{e}</div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[15px] font-extrabold leading-snug">{h}</h3>
+        <p className="text-[12.5px] leading-snug mt-0.5" style={{ color: "#7A6E58" }}>{p}</p>
+      </div>
+    </div>
+  );
+}
+// Connecteur flèche entre deux nœuds.
+function FlowArrow() {
+  return (
+    <div className="flex justify-center py-1" aria-hidden="true">
+      <span style={{ color: "#B9954A", fontSize: 20, fontWeight: 900, lineHeight: 1 }}>↓</span>
     </div>
   );
 }
