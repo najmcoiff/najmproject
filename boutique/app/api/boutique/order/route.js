@@ -481,27 +481,6 @@ async function sendPurchaseCAPI({ world, session_id, order_id, items, total, cli
 // ── Programme Ambassadeur — Couche 1 ────────────────────────────────────────
 // Scénario 2 : commande AVEC code coiffeur      → coiffeur 50 % (vente directe)
 // Scénario 3 : rachat SANS code (tel attribué)  → parrain 20 % (rente)
-// Notif WhatsApp au coiffeur quand une commande passe avec son code / sur sa rente.
-// Template WATI « nc_commission_new » (Utility). Best-effort : n'interrompt jamais la commande.
-// {{name}} prénom · {{amount}} montant DA · {{ref}} code (uniquement dans l'URL du bouton).
-async function notifyCommissionNew(phone9, firstName, montant, code) {
-  const url = (process.env.WATI_API_URL || "").replace(/\/$/, "");
-  const token = process.env.WATI_API_TOKEN;
-  if (!url || !token || !phone9 || !(montant > 0)) return;
-  const params = [
-    { name: "name",   value: firstName || "" },
-    { name: "amount", value: String(montant) },
-    { name: "ref",    value: code || "" },
-  ];
-  try {
-    await fetch(`${url}/api/v1/sendTemplateMessage?whatsappNumber=213${phone9}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ template_name: "nc_commission_new", broadcast_name: `amb_new_${Date.now()}`, parameters: params }),
-    });
-  } catch { /* silencieux : la notif ne doit jamais casser la commande */ }
-}
-
 // Le client ne reçoit AUCUNE remise ici (Couche 1 = express + garanties, coût 0).
 // La commission reste 'en_attente' jusqu'au COD confirmé + payé (voir dashboard).
 async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
@@ -605,14 +584,14 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
       if (!commErr) {
         // Refléter en "cagnotte en attente" (débloquée quand COD payé)
         const { data: a } = await sb.from("nc_ambassadeurs")
-          .select("cagnotte_attente_da, full_name").eq("phone", earner.phone).maybeSingle();
+          .select("cagnotte_attente_da").eq("phone", earner.phone).maybeSingle();
         if (a) {
           await sb.from("nc_ambassadeurs")
             .update({ cagnotte_attente_da: Number(a.cagnotte_attente_da || 0) + montant })
             .eq("phone", earner.phone);
         }
-        // Notif WhatsApp « زبونك طلب، رحت تربح X » (best-effort, ne bloque pas la commande)
-        notifyCommissionNew(earner.phone, (a?.full_name || "").trim().split(/\s+/)[0] || "", montant, earner.code);
+        // Pas de notif ici : un SEUL message, envoyé quand la commission est validée
+        // (livraison) — voir dashboard/validate-delivery. Évite 2 messages par commande.
       }
     }
   } catch (err) {
