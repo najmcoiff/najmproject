@@ -97,6 +97,7 @@ export async function resolveParrain(sb, phone) {
 //  '4_rente_ambassadeur'  ambassadeur-client via son code     → parrain 20 % (client a sa remise 40 %)
 //  '1b_coiffeur_recrute'  coiffeur recruté achète pour lui    → coiffeur 40 % + parrain 20 %
 const TAUX = {
+  "1_achat_perso":       { self: 0.50, parrain: 0 },     // le coiffeur commande pour LUI avec son code → 50 %
   "2_vente_directe":     { self: 0.50, parrain: 0 },
   "3_rente_sans_code":   { self: 0,    parrain: 0.20 },
   "4_rente_ambassadeur": { self: 0,    parrain: 0.20 },

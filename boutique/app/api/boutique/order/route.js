@@ -245,7 +245,7 @@ export async function POST(request) {
     // Attribution WhatsApp : si ce numéro a reçu un message dans les 72h → conversion
     attributeWhatsAppConversion(sb, phone, newOrder.order_id, total),
     // Programme Ambassadeur (Couche 1) : commission coiffeur / rente parrain
-    creditAmbassadeur(sb, newOrder, items, phone, ambassadeur_code),
+    creditAmbassadeur(sb, newOrder, items, phone, ambassadeur_code, creditSpent),
     // Meta CAPI Purchase (server-side — bypass adblockers)
     sendPurchaseCAPI({
       world:      world || null,
@@ -504,7 +504,7 @@ async function notifyCommission(phone9, firstName, montant, code) {
 
 // Le client ne reçoit AUCUNE remise ici (Couche 1 = express + garanties, coût 0).
 // La commission reste 'en_attente' jusqu'au COD confirmé + payé (voir dashboard).
-async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
+async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode, creditSpent = 0) {
   try {
     const phone = normPhone(rawPhone);
     if (phone.length < 9) return;
@@ -517,17 +517,24 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
     const existingLien = await resolveParrain(sb, phone);
 
     if (ambassadeurCode) {
-      // Scénario 2 — le client utilise un code coiffeur
       const amb = await resolveCode(sb, ambassadeurCode);
       if (!amb) return;                              // code inconnu → rien
-      if (normPhone(amb.phone) === phone) return;    // auto-parrainage interdit
-      earner   = { code: amb.code, phone: normPhone(amb.phone) };
-      scenario = "2_vente_directe";
-      if (!existingLien) {
-        isNewLien = true;
-      } else if (normPhone(existingLien.ambassadeur_phone) !== earner.phone) {
-        // Le client était attribué à un AUTRE coiffeur → « dernier code gagne » : il bascule.
-        switchLien = true;
+      if (normPhone(amb.phone) === phone) {
+        // Scénario 1 — AUTO-ACHAT : le coiffeur commande pour LUI avec son propre code.
+        // Il gagne 50 % (comme un client via son code), sur la marge NETTE (voir plus bas).
+        // Pas de lien (il n'est pas son propre filleul), pas de bascule.
+        earner   = { code: amb.code, phone };
+        scenario = "1_achat_perso";
+      } else {
+        // Scénario 2 — un client utilise le code d'un coiffeur
+        earner   = { code: amb.code, phone: normPhone(amb.phone) };
+        scenario = "2_vente_directe";
+        if (!existingLien) {
+          isNewLien = true;
+        } else if (normPhone(existingLien.ambassadeur_phone) !== earner.phone) {
+          // Le client était attribué à un AUTRE coiffeur → « dernier code gagne » : il bascule.
+          switchLien = true;
+        }
       }
     } else if (existingLien) {
       // Scénario 3 — rachat sans code, numéro déjà attribué à un parrain
@@ -585,9 +592,12 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
 
     // Marge réelle (INTERNE) + montant selon la grille (plancher NajmCoiff 40 %)
     const { marge } = await computeMargin(sb, items);
-    const comm    = commissionFor(scenario, marge, { hasParrain: scenario === "3_rente_sans_code" });
-    const montant = scenario === "2_vente_directe" ? comm.self_da   : comm.parrain_da;
-    const taux    = scenario === "2_vente_directe" ? comm.taux_self : comm.taux_parrain;
+    // Auto-achat : commission sur la marge NETTE (après le crédit qu'il dépense sur la
+    // MÊME commande) → jamais sous le coût, même s'il dépense son solde en même temps.
+    const effMarge = scenario === "1_achat_perso" ? Math.max(0, marge - (creditSpent || 0)) : marge;
+    const comm    = commissionFor(scenario, effMarge, { hasParrain: scenario === "3_rente_sans_code" });
+    const montant = scenario === "3_rente_sans_code" ? comm.parrain_da   : comm.self_da;
+    const taux    = scenario === "3_rente_sans_code" ? comm.taux_parrain : comm.taux_self;
 
     // Enregistrer la commission (en attente jusqu'au COD payé)
     if (montant > 0) {
@@ -612,8 +622,11 @@ async function creditAmbassadeur(sb, order, items, rawPhone, ambassadeurCode) {
             .eq("phone", earner.phone);
         }
         // UN SEUL message WhatsApp, au moment de la commande (« طلبية جديدة… رصيدك المعلّق…
-        // سيتم تأكيدها بعد التوصيل »). Best-effort, ne bloque jamais la commande.
-        notifyCommission(earner.phone, (a?.full_name || "").trim().split(/\s+/)[0] || "", montant, earner.code);
+        // سيتم تأكيدها بعد التوصيل »). Best-effort. Pas pour l'auto-achat (le coiffeur sait
+        // qu'il a acheté, et le wording « زبونك دار طلبية » ne colle pas).
+        if (scenario !== "1_achat_perso") {
+          notifyCommission(earner.phone, (a?.full_name || "").trim().split(/\s+/)[0] || "", montant, earner.code);
+        }
       }
     }
   } catch (err) {
