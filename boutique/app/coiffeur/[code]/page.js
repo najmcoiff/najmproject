@@ -158,6 +158,19 @@ export default function CoiffeurSpace() {
         </a>
       </section>
 
+      {/* Guide du partenaire — tout le système expliqué */}
+      <a href={`/coiffeur/${encodeURIComponent(data.code)}/guide`}
+        className="flex items-center justify-between rounded-2xl bg-white border border-gray-200 p-4 active:scale-[.99] transition">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📖</span>
+          <div className="text-right">
+            <div className="text-[14px] font-extrabold">دليل الشريك</div>
+            <div className="text-[12px] text-gray-500">كيفاش تربح أكثر · كل الحالات · نصائح</div>
+          </div>
+        </div>
+        <span className="text-gray-400 text-xl leading-none">‹</span>
+      </a>
+
       {/* Stats */}
       <section className="grid grid-cols-3 gap-2.5">
         <Stat v={fmt(data.total_clients)} k="زبون" />
