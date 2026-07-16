@@ -61,10 +61,18 @@ export default function GuidePartenaire() {
         {/* Notes importantes */}
         <GroupTitle emoji="📢" title="ملاحظات مهمة" />
         <section className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "#FBF8F1", border: "1px solid #E4DAC6" }}>
-          <Note d="نرجو الالتزام بالاحترام المتبادل مع فريق العمل. في حال أي إساءة أو تجاوز، تحتفظ نجم كواف بحق إيقاف الحساب و إلغاء كود الشراكة، مع إمكانية استعمال رصيدك المستحق قبل الإغلاق." />
+          <Note d="نرجو الالتزام بالاحترام المتبادل مع فريق العمل. في حال أي إساءة أو تجاوز، تحتفظ نجم كواف بحق إيقاف الحساب و إلغاء كود الشراكة، مع إرجاع رصيدك المستحق إليك." />
           <Note d="نسبة العمولة يحسبها النظام تلقائيًا حسب عدة عوامل داخلية (تكلفة الشراء، توفّر المنتجات، اتفاقيات الموردين، تكاليف الشحن...)، لذلك فهي غير قابلة للتفاوض أو التعديل." />
           <Note d="لأي استفسار حول البرنامج، تواصل عبر واتساب فقط — فريق خدمة الشركاء يرد عليك غالبًا في أقل من 10 دقائق في أوقات العمل." />
         </section>
+
+        {/* Contact WhatsApp support partenaires */}
+        <a href="https://wa.me/213798522820?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%D8%8C%20%D8%B9%D9%86%D8%AF%D9%8A%20%D8%B3%D8%A4%D8%A7%D9%84%20%D8%AD%D9%88%D9%84%20%D8%A8%D8%B1%D9%86%D8%A7%D9%85%D8%AC%20%D8%A7%D9%84%D8%B4%D8%B1%D9%83%D8%A7%D8%A1"
+          target="_blank" rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 font-bold text-[14px] text-white" style={{ background: "#1FA855" }}>
+          <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1012 2zm5.8 14.2c-.2.6-1.2 1.1-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.7-1.2-4.4-3.9-4.6-4.1-.1-.2-1-1.4-1-2.6 0-1.2.6-1.8.9-2.1.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.7 1.8c.1.2.1.4 0 .5l-.3.5-.3.3c-.1.1-.3.3-.1.5.1.3.7 1.1 1.4 1.7.9.8 1.6 1 1.9 1.2.2.1.4.1.5-.1l.6-.7c.2-.2.3-.2.6-.1l1.7.8c.3.1.4.2.5.3.1.2.1.7-.1 1.3z"/></svg>
+          عندك سؤال؟ تواصل مع خدمة الشركاء
+        </a>
 
         <a href={back} className="text-center rounded-xl py-3.5 font-bold text-[14px] text-[#20180a] mt-1"
           style={{ background: "linear-gradient(180deg,#E3C88A,#CBA45C)" }}>

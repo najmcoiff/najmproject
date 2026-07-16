@@ -1241,6 +1241,71 @@ Sur mobile elle se cache — appuie sur l'icône ☰ (hamburger) en haut à gauc
       },
     ],
   },
+
+  // ─────────────────── PROGRAMME PARTENAIRE (AMBASSADEURS) ──────
+  {
+    id: "partenaire",
+    icon: "👑",
+    title: "Programme Partenaire",
+    color: "amber",
+    desc: "Le programme d'affiliation des coiffeurs : comment ça marche, tous les cas de gain, et surtout comment répondre aux coiffeurs (les réponses en darija sont prêtes).",
+    subsections: [
+      {
+        id: "part-intro",
+        title: "C'est quoi le Programme Partenaire ?",
+        icon: "🎯",
+        content: "NajmCoiff devient le « sponsor » du coiffeur. Chaque coiffeur a un code perso (ex. karim42), le partage à ses clients, et gagne une commission en DA sur chaque commande passée avec son code. But : activer notre base de coiffeurs et doubler les commandes.",
+        details: [
+          { label: "Pour qui", desc: "Les coiffeurs (حلاق). Les clients finaux ne gagnent PAS d'argent — eux ont livraison express + garantie authenticité, coût 0." },
+          { label: "L'espace du coiffeur", desc: "najmcoiff.com/coiffeur/[code] — pas de login, le lien EST la clé. Il y voit son solde en DA, son historique, et son guide." },
+          { label: "Ce qu'il ne voit JAMAIS", desc: "Les pourcentages, la marge, ton coût d'achat. On ne les communique jamais, même s'il insiste. Il voit uniquement ses gains en DA." },
+        ],
+      },
+      {
+        id: "part-cas",
+        title: "Comment un coiffeur gagne — tous les cas",
+        icon: "💰",
+        content: "Connais ces cas pour répondre juste. La commission est d'abord « en attente », puis « validée » à la LIVRAISON de la commande (COD payé). Annulée si retour/annulation.",
+        details: [
+          { label: "1. Un client commande avec le code", desc: "Le coiffeur gagne une commission (en attente → validée à la livraison)." },
+          { label: "2. Le client rachète avec le même code", desc: "Nouvelle commission à chaque commande." },
+          { label: "3. Le client rachète SANS code", desc: "Son numéro reste lié au coiffeur → commission plus petite (rente automatique)." },
+          { label: "4. « Dernier code gagne »", desc: "Si un client tape le code d'un AUTRE coiffeur, il bascule dans le réseau de ce coiffeur (l'ancien perd les gains futurs sur ce client). C'est voulu — le client a choisi." },
+          { label: "5. Un coiffeur achète avec le code d'un autre", desc: "Il compte comme un client dans le réseau de celui-ci." },
+          { label: "6. Auto-achat (le coiffeur commande pour lui avec SON code)", desc: "Il gagne une commission (50% en INTERNE — ne jamais dire le %). Si en plus il dépense son solde sur la même commande, la commission se calcule sur la marge restante (jamais sous le coût)." },
+          { label: "7. Dépense du solde", desc: "Le coiffeur utilise son solde comme réduction sur ses propres commandes (partiel ou total). Le solde ne se retire PAS en cash." },
+        ],
+      },
+      {
+        id: "part-faq",
+        title: "Répondre aux coiffeurs (FAQ & conflits)",
+        icon: "🛡️",
+        content: "Les questions fréquentes et la réponse à donner en darija. Objectif de réponse WhatsApp : moins de 10 minutes en horaires de travail.",
+        details: [
+          { label: "« Où est mon argent ? » — وين راهي فلوسي؟", desc: "Réponse : « رصيدك يتأكد عند توصيل الطلبية. شوف رصيدك المعلّق في فضاءك. » Rassure-le, montre-lui le montant « en attente » dans son espace." },
+          { label: "« Le client a payé plus cher ? »", desc: "Non. Réponse : « لا، الزبون ما يخلّص والو زيادة، بالعكس عندو ضمان و توصيل سريع. »" },
+          { label: "« Mon client a utilisé le code d'un autre »", desc: "Réponse : « آخر كود مستعمل يربح الزبون. ذكّر زبائنك دائمًا يستعملو كودك. » Ne promets pas de récupérer le client." },
+          { label: "« C'est combien le % ? Négocie mon taux »", desc: "JAMAIS de %. Réponse : « النسبة يحسبها النظام تلقائيًا حسب عدة عوامل، و غير قابلة للتفاوض. » Ne dévoile ni %, ni marge, ni coût." },
+          { label: "« Je veux retirer mon argent en cash »", desc: "Pas de cash. Réponse : « رصيدك تستعملو كتخفيض على مشترياتك عند نجم كواف. »" },
+          { label: "Coiffeur irrespectueux / abus", desc: "Rester pro. En cas d'abus, l'owner peut suspendre le compte et annuler le code — avec REMBOURSEMENT du solde dû (on ne garde pas son argent)." },
+        ],
+      },
+      {
+        id: "part-regles",
+        title: "Règles à retenir",
+        icon: "📌",
+        content: "Les garde-fous du programme — à appliquer sans exception.",
+        details: [
+          { label: "Jamais de % ni de marge", desc: "On communique uniquement les gains en DA. Le reste est interne." },
+          { label: "Gain validé à la livraison", desc: "« en attente » → « validé » quand la commande est livrée/payée ; annulé si retour/annulation." },
+          { label: "Solde dépensable, pas de cash", desc: "Le coiffeur dépense son solde sur ses propres commandes. Aucun retrait en espèces." },
+          { label: "Suspension = remboursement", desc: "Si un compte est désactivé, on rembourse le solde dû au coiffeur." },
+          { label: "Contact coiffeurs = WhatsApp", desc: "0798522820 uniquement. Réponse attendue : moins de 10 minutes en horaires de travail." },
+          { label: "Le guide du coiffeur", desc: "Chaque coiffeur a son guide : najmcoiff.com/coiffeur/[code]/guide (دليل الشريك). Renvoie-le vers ce guide pour les questions générales." },
+        ],
+      },
+    ],
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
